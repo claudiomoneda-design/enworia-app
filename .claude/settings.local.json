@@ -1,0 +1,30 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(npx create-next-app@14 . --typescript --tailwind --eslint --app --src-dir --no-import-alias --use-npm)",
+      "Bash(npx create-next-app@14 temp-init --typescript --tailwind --eslint --app --src-dir --no-import-alias --use-npm)",
+      "Bash(cp -r temp-init/* .)",
+      "Bash(cp temp-init/.eslintrc.json .)",
+      "Bash(cp temp-init/.gitignore .)",
+      "Bash(cp -r temp-init/node_modules .)",
+      "Bash(rm -rf temp-init)",
+      "Bash(shopt -s dotglob)",
+      "Bash(cp -r package.json package-lock.json postcss.config.mjs tailwind.config.ts tsconfig.json next.config.mjs next-env.d.ts README.md ../)",
+      "Bash(cp -r src ../)",
+      "Bash(cp -r .eslintrc.json ../)",
+      "Bash(cp .gitignore ../)",
+      "Bash(npx next:*)",
+      "Bash(npm ls:*)",
+      "Bash(npm install:*)",
+      "Bash(npm run:*)",
+      "Bash(find /Users/claud/Desktop/enworia/src/components -type f -name *.tsx -o -name *.ts)",
+      "Bash(find:*)",
+      "Bash(taskkill //F //IM node.exe)",
+      "Bash(rm -rf .next)",
+      "Bash(npx tsc:*)",
+      "Bash(node -e \"try { require.resolve\\(''recharts''\\); console.log\\(''recharts OK''\\); } catch\\(e\\) { console.log\\(''recharts MISSING''\\); }\")",
+      "Bash(node -e \"try { require.resolve\\(''next''\\); console.log\\(''next OK''\\); } catch\\(e\\) { console.log\\(''next MISSING''\\); }\")",
+      "Bash(node -e \"try { require.resolve\\(''react''\\); console.log\\(''react OK''\\); } catch\\(e\\) { console.log\\(''react MISSING''\\); }\")"
+    ]
+  }
+}
