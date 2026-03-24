@@ -15,15 +15,15 @@ export default function RootLayout({
   return (
     <html lang="it">
       <body className="antialiased min-h-screen">
-        <header className="border-b border-[var(--border)] bg-white">
+        <header className="border-b border-[#E2EAE8] bg-[#1C2B28]">
           <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
-            <Link href="/" className="text-xl font-bold tracking-tight text-[var(--primary)]">
+            <Link href="/" className="text-xl font-bold tracking-tight text-white">
               Enworia
             </Link>
             <nav className="flex gap-6 text-sm">
               <Link
                 href="/clients"
-                className="text-[var(--muted)] hover:text-[var(--foreground)] transition-colors"
+                className="text-[#A8C5BE] hover:text-[#27AE60] transition-colors"
               >
                 Clienti
               </Link>

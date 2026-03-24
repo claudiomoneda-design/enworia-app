@@ -3,12 +3,18 @@
 @tailwind utilities;
 
 :root {
-  --background: #f8f9fa;
-  --foreground: #1a1a2e;
-  --primary: #2d3436;
-  --accent: #0984e3;
-  --border: #dfe6e9;
+  --background: #F4F8F7;
+  --foreground: #1C2B28;
+  --primary: #1C2B28;
+  --accent: #27AE60;
+  --border: #E2EAE8;
   --muted: #636e72;
+
+  --enworia-accent: #27AE60;
+  --enworia-dark: #1C2B28;
+  --enworia-surface: #2A3D39;
+  --enworia-warning: #E8A020;
+  --enworia-text-muted: #A8C5BE;
 }
 
 body {

@@ -248,25 +248,34 @@ export default function ClientDetailPage() {
           </button>
         </div>
 
-        {/* Card 3 — PDF */}
+        {/* Card 3 — Scope 3 */}
         <div className="bg-white rounded-lg border border-[var(--border)] p-5 flex flex-col">
-          <h3 className="text-sm font-semibold text-[var(--foreground)] mb-1">Report GHG Completo</h3>
+          <h3 className="text-sm font-semibold text-[var(--foreground)] mb-1">Scope 3 — Emissioni indirette</h3>
           <p className="text-xs text-[var(--muted)] mb-4 flex-1">
-            Report ISO 14064-1 completo con verifica incertezza e ripartizione per gas
+            Screening significatività e quantificazione categorie ISO 14064-1
           </p>
-          <button
-            type="button"
-            disabled={!hasCompletedGhg}
-            className="text-white text-center px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
-            style={{ backgroundColor: GHG_GREEN }}
-            title={!hasCompletedGhg ? "Disponibile dopo aver completato un calcolo GHG" : undefined}
-          >
-            Genera report PDF
-          </button>
-          {!hasCompletedGhg && (
-            <p className="text-[10px] text-[var(--muted)] text-center mt-1">
-              Completa prima un calcolo GHG
-            </p>
+          {hasCompletedGhg && latestGhg ? (
+            <Link
+              href={`/clients/${id}/ghg/${latestGhg.id}/scope3`}
+              className="text-white text-center px-4 py-2 rounded-md text-sm font-medium transition-colors block w-full"
+              style={{ backgroundColor: "#2563eb" }}
+            >
+              + Scope 3
+            </Link>
+          ) : (
+            <>
+              <button
+                type="button"
+                disabled
+                className="text-white text-center px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                style={{ backgroundColor: "#2563eb" }}
+              >
+                + Scope 3
+              </button>
+              <p className="text-[10px] text-[var(--muted)] text-center mt-1">
+                Completa prima un calcolo GHG
+              </p>
+            </>
           )}
         </div>
       </div>

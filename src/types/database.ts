@@ -48,6 +48,9 @@ export interface Company {
   certifications: string[];
   first_report: boolean;
   previous_report_url: string | null;
+  responsible_name: string | null;
+  website: string | null;
+  email: string | null;
   form_status: FormStatus;
   last_saved_at: string | null;
   created_at: string;

@@ -7,7 +7,7 @@ export function Card({
 }) {
   return (
     <div className="bg-white rounded-lg border border-[var(--border)] overflow-hidden">
-      <div className="bg-[#1E5C3A] px-5 py-3">
+      <div className="bg-[#1C2B28] px-5 py-3">
         <h2 className="text-white font-semibold text-sm tracking-wide">
           {title}
         </h2>

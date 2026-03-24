@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { Card } from "@/components/ui/Card";
 import { FormField } from "@/components/ui/FormField";
 import { NaceAutocomplete } from "@/components/ui/NaceAutocomplete";
@@ -25,6 +26,9 @@ export function CompanyForm({ companyId, onSaved }: CompanyFormProps) {
   const form = useCompanyForm(companyId);
   const { data, loading, saving, lastSaved, error, save, updateField } = form;
   const completion = countCompleted(data);
+  const [autofillLoading, setAutofillLoading] = useState(false);
+  const [autofillBanner, setAutofillBanner] = useState(false);
+  const [autofillError, setAutofillError] = useState<string | null>(null);
 
   async function handleSave() {
     await save();
@@ -72,6 +76,73 @@ export function CompanyForm({ companyId, onSaved }: CompanyFormProps) {
         <div className="bg-red-50 border border-red-200 text-red-700 px-4 py-3 rounded-md text-sm">
           {error}
         </div>
+      )}
+
+      {/* AI Autofill */}
+      {!companyId && (
+        <Card title="Compila automaticamente dal sito web">
+          <div className="flex gap-3 items-end">
+            <div className="flex-1">
+              <label className="text-sm font-medium text-[var(--foreground)] mb-1.5 block">Sito web aziendale</label>
+              <input
+                value={data.website ?? ""}
+                onChange={(e) => updateField("website", e.target.value || null)}
+                placeholder="https://www.azienda.it"
+                className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5C3A]/30 focus:border-[#1E5C3A]"
+              />
+            </div>
+            <button
+              type="button"
+              disabled={autofillLoading || !data.website}
+              onClick={async () => {
+                setAutofillLoading(true);
+                setAutofillError(null);
+                setAutofillBanner(false);
+                try {
+                  const res = await fetch("/api/company/autofill", {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ url: data.website }),
+                  });
+                  if (!res.ok) {
+                    const e = await res.json().catch(() => ({}));
+                    throw new Error((e as { error?: string }).error || "Errore");
+                  }
+                  const ai = await res.json();
+                  if (ai.company_name) updateField("company_name", ai.company_name);
+                  if (ai.legal_form) updateField("legal_form", ai.legal_form);
+                  if (ai.registered_address) updateField("registered_address", ai.registered_address);
+                  if (ai.email) updateField("email", ai.email);
+                  if (ai.responsible_name) updateField("responsible_name", ai.responsible_name);
+                  if (ai.nace_description) updateField("nace_description", ai.nace_description);
+                  if (ai.country) updateField("country", ai.country);
+                  if (ai.number_of_employees && typeof ai.number_of_employees === "number") {
+                    updateField("number_of_employees", ai.number_of_employees);
+                  }
+                  setAutofillBanner(true);
+                } catch (err) {
+                  setAutofillError(err instanceof Error ? err.message : "Errore durante l'analisi");
+                } finally {
+                  setAutofillLoading(false);
+                }
+              }}
+              className="px-4 py-2 rounded-md text-sm font-medium text-white transition-colors disabled:opacity-50 whitespace-nowrap"
+              style={{ backgroundColor: autofillLoading ? "#999" : "#1E5C3A" }}
+            >
+              {autofillLoading ? "Analisi sito in corso..." : "Compila con AI"}
+            </button>
+          </div>
+          {autofillBanner && (
+            <div className="mt-3 bg-green-50 border border-green-200 text-green-800 px-4 py-2.5 rounded-md text-sm">
+              Dati compilati automaticamente — verifica e correggi se necessario
+            </div>
+          )}
+          {autofillError && (
+            <div className="mt-3 bg-red-50 border border-red-200 text-red-700 px-4 py-2.5 rounded-md text-sm">
+              {autofillError}
+            </div>
+          )}
+        </Card>
       )}
 
       {/* B1 — Report Information */}
@@ -244,6 +315,35 @@ export function CompanyForm({ companyId, onSaved }: CompanyFormProps) {
             className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5C3A]/30 focus:border-[#1E5C3A] resize-none"
           />
         </FormField>
+
+        <FormField label="Responsabile ESG / Inventario GHG" name="responsible_name">
+          <input
+            value={data.responsible_name ?? ""}
+            onChange={(e) => updateField("responsible_name", e.target.value || null)}
+            placeholder="Nome e cognome del responsabile"
+            className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5C3A]/30 focus:border-[#1E5C3A]"
+          />
+        </FormField>
+
+        <div className="grid grid-cols-2 gap-4">
+          <FormField label="Sito web" name="website">
+            <input
+              value={data.website ?? ""}
+              onChange={(e) => updateField("website", e.target.value || null)}
+              placeholder="https://www.azienda.it"
+              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5C3A]/30 focus:border-[#1E5C3A]"
+            />
+          </FormField>
+          <FormField label="Email aziendale" name="email">
+            <input
+              type="email"
+              value={data.email ?? ""}
+              onChange={(e) => updateField("email", e.target.value || null)}
+              placeholder="info@azienda.it"
+              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#1E5C3A]/30 focus:border-[#1E5C3A]"
+            />
+          </FormField>
+        </div>
       </Card>
 
       {/* B1 — Sites */}

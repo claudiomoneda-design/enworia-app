@@ -43,6 +43,9 @@ function defaultFormData(): FormData {
     certifications: [],
     first_report: true,
     previous_report_url: null,
+    responsible_name: null,
+    website: null,
+    email: null,
     form_status: "draft",
     last_saved_at: null,
   };

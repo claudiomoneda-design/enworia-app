@@ -174,23 +174,47 @@ export interface ElectricityPod {
   market_emissions: number;
 }
 
+export interface Installation {
+  name: string;
+  address: string;
+}
+
+export type VerificationStatus = "non_verificato" | "verifica_limitata" | "verifica_ragionevole";
+export type CategoryStatus = "non_rendicontato" | "significativo" | "non_significativo_documentato";
+
 export interface GhgFormData {
-  // Step 1
+  // Step 1 — Contesto inventario ISO 14064-1
+  reference_year: number | null;
+  reference_year_rationale: string;
+  consolidation_approach: ConsolidationApproach;
+  installations: Installation[];
+  verification_status: VerificationStatus;
+  verification_body: string;
+  inventory_purpose: string[];
+  category_3_status: CategoryStatus;
+  category_3_rationale: string;
+  category_4_status: CategoryStatus;
+  category_4_rationale: string;
+  category_5_status: CategoryStatus;
+  category_5_rationale: string;
+  category_6_status: CategoryStatus;
+  category_6_rationale: string;
+  materiality_criteria: string;
+  // Step 2 — Perimetro
   year: number;
   base_year: number;
   base_year_recalculation: string[];
   base_year_recalculation_notes: string;
   perimeter: PerimeterType;
-  consolidation_approach: ConsolidationApproach;
   entities: OrganizationalEntity[];
   included_entities: string;
   notes: string;
-  // Step 2 — Combustione stazionaria
+  // Step 3 — Combustione stazionaria
   stationary_sources: StationarySource[];
-  // Step 3
-  fleet_vehicles: FleetVehicle[];
   // Step 4
-  hfc_gases: HfcGas[];
+  fleet_vehicles: FleetVehicle[];
   // Step 5
+  hfc_gases: HfcGas[];
+  // Step 6
   electricity_pods: ElectricityPod[];
 }

@@ -21,6 +21,8 @@ import type {
   EntityControlType,
   StationaryFuelType,
   GasBreakdown,
+  VerificationStatus,
+  CategoryStatus,
 } from "@/types/ghg";
 import { DATA_QUALITY_UNCERTAINTY } from "@/types/ghg";
 import {
@@ -45,8 +47,13 @@ import {
   GWP_N2O,
 } from "@/data/ghg-constants";
 
-const GHG_GREEN = "#006450";
-const GHG_GREEN_HOVER = "#005240";
+const GHG_GREEN = "#27AE60";
+const GHG_GREEN_HOVER = "#1A8A47";
+const GHG_DARK = "#1C2B28";
+
+// ─── locale number formatters (Italian: comma decimal) ───
+const itN = (v: number, decimals: number) =>
+  v.toLocaleString("it-IT", { minimumFractionDigits: decimals, maximumFractionDigits: decimals });
 
 // ─── helpers ──────────────────────────────────────────────
 function emptyMonth(): number[] {
@@ -212,17 +219,37 @@ function newEntity(): OrganizationalEntity {
   };
 }
 
+const DEFAULT_CATEGORY_RATIONALE = "Categoria valutata come non significativa per questa organizzazione nel periodo di rendicontazione. Criteri applicati: entità stimata trascurabile, dati non disponibili con sufficiente accuratezza.";
+
 function defaultFormData(): GhgFormData {
   return {
+    // Step 1 — Contesto inventario
+    reference_year: null,
+    reference_year_rationale: "Primo anno di inventario — utilizzato come baseline per i confronti futuri ai sensi del §6.4.1 della norma UNI EN ISO 14064-1:2019.",
+    consolidation_approach: "operational",
+    installations: [],
+    verification_status: "non_verificato",
+    verification_body: "",
+    inventory_purpose: ["rendicontazione_volontaria"],
+    category_3_status: "non_rendicontato",
+    category_3_rationale: DEFAULT_CATEGORY_RATIONALE,
+    category_4_status: "non_rendicontato",
+    category_4_rationale: DEFAULT_CATEGORY_RATIONALE,
+    category_5_status: "non_rendicontato",
+    category_5_rationale: DEFAULT_CATEGORY_RATIONALE,
+    category_6_status: "non_rendicontato",
+    category_6_rationale: DEFAULT_CATEGORY_RATIONALE,
+    materiality_criteria: "Le emissioni indirette significative sono state identificate sulla base dei criteri di entità, livello di influenza e accuratezza dei dati disponibili, in conformità al §5.2.3 della norma UNI EN ISO 14064-1:2019.",
+    // Step 2 — Perimetro
     year: new Date().getFullYear() - 1,
     base_year: new Date().getFullYear() - 2,
     base_year_recalculation: [],
     base_year_recalculation_notes: "",
     perimeter: "individuale",
-    consolidation_approach: "operational",
     entities: [],
     included_entities: "",
     notes: "",
+    // Steps 3-6
     stationary_sources: [newStationarySource()],
     fleet_vehicles: [],
     hfc_gases: [],
@@ -290,7 +317,7 @@ function UncertaintyBadge({ uncertainty }: { uncertainty: number }) {
   return (
     <span className={`inline-flex items-center gap-1 text-xs px-2 py-0.5 rounded-full ${colors.bg} ${colors.text}`}>
       <span className={`w-2 h-2 rounded-full ${colors.dot}`}></span>
-      ±{uncertainty.toFixed(1)}% · {sem.text}
+      ±{itN(uncertainty, 1)}% · {sem.text}
     </span>
   );
 }
@@ -321,12 +348,76 @@ type AutoSaveStatus = "idle" | "pending" | "saving" | "saved" | "error";
 function StepCard({ title, children }: { title: string; children: React.ReactNode }) {
   return (
     <div className="bg-white rounded-lg border border-[var(--border)] overflow-hidden">
-      <div className="px-5 py-3" style={{ backgroundColor: GHG_GREEN }}>
+      <div className="px-5 py-3" style={{ backgroundColor: GHG_DARK }}>
         <h2 className="text-white font-semibold text-sm tracking-wide">{title}</h2>
       </div>
       <div className="px-5 py-5 space-y-4">{children}</div>
     </div>
   );
+}
+
+// ─── EF validation ranges ────────────────────────────────────
+type EfValidation = { min: number; max: number; unit: string };
+const EF_RANGES: Record<string, EfValidation> = {
+  natural_gas: { min: 0.001, max: 0.003, unit: "tCO₂e/Sm³" },
+  lpg: { min: 0.001, max: 0.003, unit: "tCO₂e/litro" },
+  diesel: { min: 0.002, max: 0.004, unit: "tCO₂e/litro" },
+  gasolio: { min: 0.002, max: 0.004, unit: "tCO₂e/litro" },
+  benzina: { min: 0.002, max: 0.003, unit: "tCO₂e/litro" },
+  fuel_oil: { min: 0.002, max: 0.004, unit: "tCO₂e/litro" },
+  coal: { min: 0.001, max: 0.004, unit: "tCO₂e/kg" },
+  _fossil_generic: { min: 0.0001, max: 0.005, unit: "tCO₂e/unità" },
+  _electricity: { min: 0.0001, max: 0.001, unit: "tCO₂e/kWh" },
+  _refrigerant: { min: 0.0001, max: 5, unit: "tCO₂e/kg" },
+};
+
+function getEfWarning(
+  value: number | null,
+  sourceType?: "stationary" | "mobile" | "hfc" | "electricity",
+  fuelType?: string,
+): { level: "yellow" | "red"; message: string; offerConvert?: number } | null {
+  if (value == null || value === 0) return null;
+
+  // Electricity
+  if (sourceType === "electricity") {
+    const range = EF_RANGES._electricity;
+    if (value > 0.001) {
+      return {
+        level: "yellow",
+        message: `Il valore inserito (${value}) sembra essere in kgCO₂e/kWh (es. ISPRA: 0.4111). L'unità richiesta è tCO₂e/kWh (es. ISPRA: 0.0004111).`,
+        offerConvert: value / 1000,
+      };
+    }
+    if (value < range.min) {
+      return { level: "yellow", message: `Valore sotto il range atteso per elettricità: ${range.min}–${range.max} ${range.unit}` };
+    }
+    return null;
+  }
+
+  // Refrigerants
+  if (sourceType === "hfc") {
+    if (value > 10) {
+      return { level: "red", message: `Valore molto alto (${value}): verificare unità di misura. Range atteso per refrigeranti: 0.0001–5 tCO₂e/kg.` };
+    }
+    if (value > 5) {
+      return { level: "yellow", message: `Valore sopra il range tipico per refrigeranti: 0.0001–5 tCO₂e/kg.` };
+    }
+    return null;
+  }
+
+  // Very high value — likely kg instead of t
+  if (value > 1) {
+    return { level: "red", message: "Valore molto alto: verificare unità di misura. I fattori di emissione si esprimono in tCO₂e, non kgCO₂e." };
+  }
+
+  // Fossil fuels range check
+  const fuel = fuelType || "";
+  const range = EF_RANGES[fuel] || EF_RANGES._fossil_generic;
+  if (value < range.min || value > range.max) {
+    return { level: "yellow", message: `Valore fuori dal range atteso per ${fuel || "combustibile"}: ${range.min}–${range.max} ${range.unit}` };
+  }
+
+  return null;
 }
 
 function QualityAndEf({
@@ -339,6 +430,8 @@ function QualityAndEf({
   onChangeEfMode,
   onChangeEfValue,
   onChangeEfReference,
+  sourceType,
+  fuelType,
 }: {
   dataQuality: DataQuality;
   efMode: EfMode;
@@ -349,9 +442,16 @@ function QualityAndEf({
   onChangeEfMode: (v: EfMode) => void;
   onChangeEfValue: (v: number | null) => void;
   onChangeEfReference: (v: string) => void;
+  sourceType?: "stationary" | "mobile" | "hfc" | "electricity";
+  fuelType?: string;
 }) {
   const efUnc = efMode === "custom" ? 5 : standardEf.uncertainty;
   const combinedUnc = calcUncertainty(dataQuality, efUnc);
+  const [efWarning, setEfWarning] = useState<{ level: "yellow" | "red"; message: string; offerConvert?: number } | null>(null);
+
+  const handleEfBlur = () => {
+    setEfWarning(getEfWarning(efValue, sourceType, fuelType));
+  };
 
   return (
     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-3 bg-gray-50 rounded-md">
@@ -360,7 +460,7 @@ function QualityAndEf({
         <select
           value={dataQuality}
           onChange={(e) => onChangeQuality(e.target.value as DataQuality)}
-          className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+          className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
         >
           {DATA_QUALITY_OPTIONS.map((o) => (
             <option key={o.value} value={o.value}>
@@ -374,7 +474,7 @@ function QualityAndEf({
         <div className="flex gap-2 mb-2">
           <button
             type="button"
-            onClick={() => onChangeEfMode("standard")}
+            onClick={() => { onChangeEfMode("standard"); setEfWarning(null); }}
             className={`px-3 py-1 text-xs rounded-md transition-colors ${
               efMode === "standard"
                 ? "text-white"
@@ -406,17 +506,45 @@ function QualityAndEf({
             <input
               type="number"
               step="any"
-              placeholder="Valore FE"
+              placeholder="Valore FE (in tCO₂e)"
               value={efValue ?? ""}
-              onChange={(e) => onChangeEfValue(e.target.value ? Number(e.target.value) : null)}
-              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+              onChange={(e) => { onChangeEfValue(e.target.value ? Number(e.target.value) : null); setEfWarning(null); }}
+              onBlur={handleEfBlur}
+              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
             />
+            {efWarning && (
+              <div className={`text-xs px-3 py-2 rounded-md border ${
+                efWarning.level === "red"
+                  ? "bg-red-50 border-red-300 text-red-800"
+                  : "bg-amber-50 border-amber-300 text-amber-800"
+              }`}>
+                <p>{efWarning.level === "red" ? "🔴" : "⚠️"} {efWarning.message}</p>
+                {efWarning.offerConvert != null && (
+                  <div className="flex gap-2 mt-1.5">
+                    <button
+                      type="button"
+                      onClick={() => { onChangeEfValue(efWarning.offerConvert!); setEfWarning(null); }}
+                      className="px-2 py-0.5 text-xs rounded bg-amber-200 hover:bg-amber-300 font-medium"
+                    >
+                      Sì, converti a {itN(efWarning.offerConvert, 7)}
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setEfWarning(null)}
+                      className="px-2 py-0.5 text-xs rounded bg-gray-200 hover:bg-gray-300"
+                    >
+                      No, mantieni
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
             <input
               type="text"
               placeholder="Riferimento (es. DEFRA 2023)"
               value={efReference}
               onChange={(e) => onChangeEfReference(e.target.value)}
-              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
             />
           </div>
         )}
@@ -461,15 +589,34 @@ export default function GhgNewPage() {
   const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const formInitialized = useRef(false);
 
-  // Load company name
+  const [, setCompanyAddress] = useState("");
+
+  // Load company name and address
   useEffect(() => {
     supabase
       .from("companies")
-      .select("company_name")
+      .select("company_name, registered_address")
       .eq("id", companyId)
       .single()
       .then(({ data }) => {
-        if (data) setCompanyName(data.company_name);
+        if (data) {
+          setCompanyName(data.company_name);
+          setCompanyAddress(data.registered_address || "");
+          // Pre-populate installations if empty
+          setForm((prev) => {
+            if (prev.installations.length === 0) {
+              return { ...prev, installations: [{ name: data.company_name, address: data.registered_address || "" }] };
+            }
+            return prev;
+          });
+          // Pre-populate reference_year if null
+          setForm((prev) => {
+            if (prev.reference_year === null) {
+              return { ...prev, reference_year: prev.year };
+            }
+            return prev;
+          });
+        }
       });
   }, [companyId]);
 
@@ -586,10 +733,12 @@ export default function GhgNewPage() {
       // Try loading from form_data first (faster), fall back to scope tables
       const fd = rep.form_data as GhgFormData | null;
       if (fd && Object.keys(fd).length > 5) {
-        setForm(fd);
+        // Merge with defaults to handle old form_data missing new fields
+        setForm({ ...defaultFormData(), ...fd });
       } else {
         const repYear = (rep.reference_year as number) || (rep.year as number);
         setForm({
+          ...defaultFormData(),
           year: repYear,
           base_year: (rep.base_year as number) || repYear - 1,
           base_year_recalculation: (rep.base_year_recalculation as string[]) || [],
@@ -1118,6 +1267,7 @@ export default function GhgNewPage() {
 
   // ─── Render ───────────────────────────────────────
   const STEPS = [
+    "Contesto ISO",
     "Perimetro",
     "Comb. stazionaria",
     "Comb. mobile",
@@ -1125,6 +1275,7 @@ export default function GhgNewPage() {
     "Elettricità",
     "Revisione",
   ];
+  const TOTAL_STEPS = STEPS.length;
 
   return (
     <div className="space-y-6" style={{ fontFamily: "Arial, sans-serif" }}>
@@ -1183,7 +1334,7 @@ export default function GhgNewPage() {
                 Salvato: {lastSaved.toLocaleTimeString("it-IT")}
               </span>
             )}
-            {saving && <span className="ml-3 text-[#006450]">Salvataggio...</span>}
+            {saving && <span className="ml-3 text-[#27AE60]">Salvataggio...</span>}
           </p>
         </div>
         <div className="flex items-center gap-3">
@@ -1236,9 +1387,287 @@ export default function GhgNewPage() {
         ))}
       </div>
 
-      {/* Step 1: Perimetro */}
+      {/* Step 1: Contesto inventario ISO 14064-1 */}
       {step === 1 && (
-        <StepCard title="Step 1 — Perimetro del report">
+        <StepCard title="Step 1 — Contesto inventario ISO 14064-1">
+          <p className="text-xs text-[var(--muted)] mb-4">
+            Questi campi alimentano i capitoli 1, 2 e 3 del report ISO 14064-1:2019.
+            I campi con <span className="text-xs bg-green-100 text-green-800 px-1 rounded">ISO</span> sono richiesti per la certificazione.
+          </p>
+
+          {/* CAMPO 1 — Anno di riferimento */}
+          <div>
+            <label className="text-sm font-medium text-[var(--foreground)] mb-1.5 flex items-center gap-2">
+              Anno di riferimento baseline <span className="text-red-400">*</span>
+              <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-mono">ISO §6.4.1</span>
+            </label>
+            <select
+              value={form.reference_year ?? form.year}
+              onChange={(e) => updateForm("reference_year", Number(e.target.value))}
+              className="w-full max-w-xs border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
+            >
+              {Array.from({ length: new Date().getFullYear() - 2014 }, (_, i) => new Date().getFullYear() - i).map((y) => (
+                <option key={y} value={y}>{y}</option>
+              ))}
+            </select>
+            <p className="text-xs text-[var(--muted)] mt-1.5">
+              Prima annualità? Seleziona l&apos;anno corrente — diventerà il tuo baseline per tutti i confronti futuri.
+            </p>
+          </div>
+
+          {/* CAMPO 2 — Motivazione anno di riferimento */}
+          <div>
+            <label className="text-sm font-medium text-[var(--foreground)] mb-1.5 flex items-center gap-2">
+              Motivazione scelta anno di riferimento <span className="text-red-400">*</span>
+              <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-mono">ISO §6.4.1</span>
+            </label>
+            <textarea
+              value={form.reference_year_rationale}
+              onChange={(e) => updateForm("reference_year_rationale", e.target.value.slice(0, 300))}
+              rows={2}
+              maxLength={300}
+              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60] resize-none"
+            />
+            <p className="text-xs text-[var(--muted)] mt-0.5 text-right">{form.reference_year_rationale.length}/300</p>
+          </div>
+
+          {/* CAMPO 3 — Approccio di consolidamento */}
+          <div>
+            <label className="text-sm font-medium text-[var(--foreground)] mb-2 flex items-center gap-2">
+              Approccio di consolidamento
+              <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-mono">ISO §5.1</span>
+            </label>
+            <div className="space-y-2">
+              {([
+                { value: "operational", label: "Controllo operativo", desc: "Contabilizza tutte le emissioni delle installazioni su cui hai piena autorità operativa (consigliato per PMI)" },
+                { value: "financial", label: "Controllo finanziario", desc: "Per gruppi societari con controllate consolidate nel bilancio" },
+                { value: "equity_share", label: "Equa ripartizione", desc: "Per joint venture o consorzi — emissioni proporzionali alla quota" },
+              ] as const).map((opt) => (
+                <label
+                  key={opt.value}
+                  className={`flex items-start gap-3 border rounded-md px-3 py-2.5 cursor-pointer transition-colors ${
+                    form.consolidation_approach === opt.value
+                      ? "border-[#27AE60] bg-[#27AE60]/5"
+                      : "border-[var(--border)] hover:bg-gray-50"
+                  }`}
+                >
+                  <input
+                    type="radio"
+                    name="iso_consolidation_approach"
+                    value={opt.value}
+                    checked={form.consolidation_approach === opt.value}
+                    onChange={() => updateForm("consolidation_approach", opt.value as ConsolidationApproach)}
+                    className="mt-0.5 accent-[#27AE60]"
+                  />
+                  <div>
+                    <span className="text-sm font-medium text-[var(--foreground)]">{opt.label}</span>
+                    <p className="text-xs text-[var(--muted)] mt-0.5">{opt.desc}</p>
+                  </div>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* CAMPO 4 — Installazioni */}
+          <div>
+            <label className="text-sm font-medium text-[var(--foreground)] mb-2 flex items-center gap-2">
+              Installazioni incluse nell&apos;inventario
+              <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-mono">ISO §5.1</span>
+            </label>
+            <p className="text-xs text-[var(--muted)] mb-2">Elenca tutti i siti/stabilimenti inclusi nei confini organizzativi.</p>
+            <div className="space-y-2">
+              {form.installations.map((inst, ii) => (
+                <div key={ii} className="flex gap-2 items-start">
+                  <input
+                    type="text"
+                    value={inst.name}
+                    onChange={(e) => {
+                      const next = [...form.installations];
+                      next[ii] = { ...next[ii], name: e.target.value };
+                      updateForm("installations", next);
+                    }}
+                    placeholder="Nome installazione"
+                    className="flex-1 border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
+                  />
+                  <input
+                    type="text"
+                    value={inst.address}
+                    onChange={(e) => {
+                      const next = [...form.installations];
+                      next[ii] = { ...next[ii], address: e.target.value };
+                      updateForm("installations", next);
+                    }}
+                    placeholder="Indirizzo"
+                    className="flex-1 border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
+                  />
+                  {form.installations.length > 1 && (
+                    <button
+                      type="button"
+                      onClick={() => updateForm("installations", form.installations.filter((_, i) => i !== ii))}
+                      className="text-red-500 text-xs hover:underline mt-2"
+                    >
+                      Rimuovi
+                    </button>
+                  )}
+                </div>
+              ))}
+            </div>
+            <button
+              type="button"
+              onClick={() => updateForm("installations", [...form.installations, { name: "", address: "" }])}
+              className="mt-2 text-sm font-medium hover:underline"
+              style={{ color: GHG_GREEN }}
+            >
+              + Aggiungi installazione
+            </button>
+          </div>
+
+          {/* CAMPO 5 — Stato verifica */}
+          <div>
+            <label className="text-sm font-medium text-[var(--foreground)] mb-1.5 flex items-center gap-2">
+              Stato verifica indipendente
+              <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-mono">ISO §9.3.1s</span>
+            </label>
+            <select
+              value={form.verification_status}
+              onChange={(e) => updateForm("verification_status", e.target.value as VerificationStatus)}
+              className="w-full max-w-md border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
+            >
+              <option value="non_verificato">Non verificato — inventario non sottoposto a verifica indipendente</option>
+              <option value="verifica_limitata">Verifica con garanzia limitata (limited assurance)</option>
+              <option value="verifica_ragionevole">Verifica con garanzia ragionevole (reasonable assurance)</option>
+            </select>
+          </div>
+
+          {/* CAMPO 6 — Organismo di verifica */}
+          {form.verification_status !== "non_verificato" && (
+            <div>
+              <label className="text-sm font-medium text-[var(--foreground)] mb-1.5 block">
+                Organismo di verifica (nome ente accreditato ISO 14065)
+              </label>
+              <input
+                type="text"
+                value={form.verification_body}
+                onChange={(e) => updateForm("verification_body", e.target.value)}
+                placeholder="es. Bureau Veritas, DNV, TÜV..."
+                className="w-full max-w-md border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
+              />
+            </div>
+          )}
+
+          {/* CAMPO 7 — Scopo inventario */}
+          <div>
+            <label className="text-sm font-medium text-[var(--foreground)] mb-2 flex items-center gap-2">
+              Scopo dell&apos;inventario GHG
+              <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-mono">ISO §3.4.6</span>
+            </label>
+            <div className="space-y-1.5">
+              {([
+                { value: "rendicontazione_volontaria", label: "Rendicontazione volontaria" },
+                { value: "supply_chain", label: "Richiesta da cliente/supply chain" },
+                { value: "bando_finanziamento", label: "Bando o finanziamento" },
+                { value: "verifica_terza_parte", label: "Preparazione verifica terza parte" },
+                { value: "vsme_reporting", label: "Rendicontazione VSME/ESG" },
+                { value: "altro", label: "Altro" },
+              ] as const).map((opt) => (
+                <label key={opt.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={form.inventory_purpose.includes(opt.value)}
+                    onChange={(e) => {
+                      const next = e.target.checked
+                        ? [...form.inventory_purpose, opt.value]
+                        : form.inventory_purpose.filter((v) => v !== opt.value);
+                      updateForm("inventory_purpose", next);
+                    }}
+                    className="accent-[#27AE60]"
+                  />
+                  <span>{opt.label}</span>
+                </label>
+              ))}
+            </div>
+          </div>
+
+          {/* ── Impostazioni avanzate (collassabile) ── */}
+          <details className="border border-gray-200 rounded-lg overflow-hidden">
+            <summary className="px-4 py-3 bg-gray-50 text-sm font-medium cursor-pointer hover:bg-gray-100">
+              Impostazioni avanzate — Categorie 3-6 e criteri di materialità
+            </summary>
+            <div className="px-4 py-4 space-y-5">
+
+              {/* CAMPO 8 — Categorie 3-6 */}
+              <div>
+                <label className="text-sm font-medium text-[var(--foreground)] mb-1 flex items-center gap-2">
+                  Categorie emissioni indirette
+                  <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-mono">ISO §5.2.4</span>
+                </label>
+                <p className="text-xs text-[var(--muted)] mb-3">
+                  La norma richiede di documentare il perché ogni categoria è inclusa o esclusa dall&apos;inventario.
+                </p>
+
+                <div className="space-y-4">
+                  {([
+                    { key: "3", label: "Cat. 3 — Trasporti", desc: "es. pendolarismo, trasporti merci a monte/valle" },
+                    { key: "4", label: "Cat. 4 — Prodotti acquistati", desc: "merci, servizi, beni investimento" },
+                    { key: "5", label: "Cat. 5 — Uso prodotti dell'organizzazione", desc: "fase d'uso, fine vita" },
+                    { key: "6", label: "Cat. 6 — Altre fonti indirette", desc: "" },
+                  ] as const).map((cat) => {
+                    const statusKey = `category_${cat.key}_status` as keyof GhgFormData;
+                    const rationaleKey = `category_${cat.key}_rationale` as keyof GhgFormData;
+                    return (
+                      <div key={cat.key} className="border border-gray-100 rounded-lg p-3 space-y-2">
+                        <div className="flex items-center justify-between">
+                          <div>
+                            <span className="text-sm font-medium">{cat.label}</span>
+                            {cat.desc && <span className="text-xs text-[var(--muted)] ml-2">({cat.desc})</span>}
+                          </div>
+                          <select
+                            value={form[statusKey] as string}
+                            onChange={(e) => updateForm(statusKey, e.target.value as CategoryStatus)}
+                            className="border border-[var(--border)] rounded-md px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30"
+                          >
+                            <option value="non_rendicontato">Non rendicontato</option>
+                            <option value="significativo">Significativo</option>
+                            <option value="non_significativo_documentato">Non significativo (documentato)</option>
+                          </select>
+                        </div>
+                        <textarea
+                          value={form[rationaleKey] as string}
+                          onChange={(e) => updateForm(rationaleKey, e.target.value)}
+                          rows={2}
+                          placeholder="Motivazione inclusione/esclusione..."
+                          className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60] resize-none"
+                        />
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* CAMPO 9 — Criteri di materialità */}
+              <div>
+                <label className="text-sm font-medium text-[var(--foreground)] mb-1.5 flex items-center gap-2">
+                  Criteri di materialità per emissioni indirette
+                  <span className="text-[10px] bg-green-100 text-green-800 px-1.5 py-0.5 rounded font-mono">ISO §5.2.3</span>
+                </label>
+                <textarea
+                  value={form.materiality_criteria}
+                  onChange={(e) => updateForm("materiality_criteria", e.target.value.slice(0, 500))}
+                  rows={3}
+                  maxLength={500}
+                  className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60] resize-none"
+                />
+                <p className="text-xs text-[var(--muted)] mt-0.5 text-right">{form.materiality_criteria.length}/500</p>
+              </div>
+
+            </div>
+          </details>
+        </StepCard>
+      )}
+
+      {/* Step 2: Perimetro */}
+      {step === 2 && (
+        <StepCard title="Step 2 — Perimetro del report">
           <div className="grid grid-cols-2 gap-4">
             <div>
               <label className="text-sm font-medium text-[var(--foreground)] mb-1.5 block">
@@ -1250,7 +1679,7 @@ export default function GhgNewPage() {
                 onChange={(e) => updateForm("year", Number(e.target.value))}
                 min={2015}
                 max={2099}
-                className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
               />
             </div>
             <div>
@@ -1260,7 +1689,7 @@ export default function GhgNewPage() {
               <select
                 value={form.perimeter}
                 onChange={(e) => updateForm("perimeter", e.target.value as "individuale" | "consolidato")}
-                className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
               >
                 {PERIMETER_OPTIONS.map((o) => (
                   <option key={o.value} value={o.value}>{o.label}</option>
@@ -1280,7 +1709,7 @@ export default function GhgNewPage() {
               onChange={(e) => updateForm("base_year", Number(e.target.value))}
               min={2000}
               max={form.year}
-              className="w-full max-w-xs border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+              className="w-full max-w-xs border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
             />
 
             {form.base_year === form.year ? (
@@ -1308,7 +1737,7 @@ export default function GhgNewPage() {
                           : form.base_year_recalculation.filter((c) => c !== cond);
                         updateForm("base_year_recalculation", next);
                       }}
-                      className="accent-[#006450]"
+                      className="accent-[#27AE60]"
                     />
                     <span className="text-[var(--foreground)]">{cond}</span>
                   </label>
@@ -1324,7 +1753,7 @@ export default function GhgNewPage() {
                       updateForm("base_year_recalculation", next);
                       if (!e.target.checked) updateForm("base_year_recalculation_notes", "");
                     }}
-                    className="accent-[#006450] mt-0.5"
+                    className="accent-[#27AE60] mt-0.5"
                   />
                   <span className="text-[var(--foreground)]">Altro</span>
                 </label>
@@ -1334,7 +1763,7 @@ export default function GhgNewPage() {
                     value={form.base_year_recalculation_notes}
                     onChange={(e) => updateForm("base_year_recalculation_notes", e.target.value)}
                     placeholder="Specificare..."
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   />
                 )}
               </div>
@@ -1346,36 +1775,10 @@ export default function GhgNewPage() {
             </p>
           </div>
 
-          {/* Approccio al perimetro — ISO 14064-1 §5.2 */}
-          <div>
-            <label className="text-sm font-medium text-[var(--foreground)] mb-2 block">
-              Approccio al perimetro <span className="text-red-400">*</span>
-            </label>
-            <div className="space-y-2">
-              {CONSOLIDATION_APPROACH_OPTIONS.map((opt) => (
-                <label
-                  key={opt.value}
-                  className={`flex items-start gap-3 border rounded-md px-3 py-2.5 cursor-pointer transition-colors ${
-                    form.consolidation_approach === opt.value
-                      ? "border-[#006450] bg-[#006450]/5"
-                      : "border-[var(--border)] hover:bg-gray-50"
-                  }`}
-                >
-                  <input
-                    type="radio"
-                    name="consolidation_approach"
-                    value={opt.value}
-                    checked={form.consolidation_approach === opt.value}
-                    onChange={() => updateForm("consolidation_approach", opt.value as ConsolidationApproach)}
-                    className="mt-0.5 accent-[#006450]"
-                  />
-                  <div>
-                    <span className="text-sm font-medium text-[var(--foreground)]">{opt.label}</span>
-                    <p className="text-xs text-[var(--muted)] mt-0.5">{opt.description}</p>
-                  </div>
-                </label>
-              ))}
-            </div>
+          {/* Approccio al perimetro — configurato in Step 1 */}
+          <div className="bg-gray-50 rounded-md px-3 py-2">
+            <span className="text-xs text-[var(--muted)]">Approccio di consolidamento (da Step 1): </span>
+            <span className="text-sm font-medium">{CONSOLIDATION_APPROACH_OPTIONS.find((o) => o.value === form.consolidation_approach)?.label || "—"}</span>
           </div>
 
           {/* Entità nel perimetro — solo se Consolidato */}
@@ -1411,7 +1814,7 @@ export default function GhgNewPage() {
                           value={ent.name}
                           onChange={(e) => updateEntity(ei, { name: e.target.value })}
                           placeholder="Ragione sociale"
-                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                         />
                       </div>
                       <div>
@@ -1425,7 +1828,7 @@ export default function GhgNewPage() {
                           step="any"
                           value={ent.ownership_pct}
                           onChange={(e) => updateEntity(ei, { ownership_pct: Number(e.target.value) || 0 })}
-                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                         />
                       </div>
                       <div>
@@ -1435,7 +1838,7 @@ export default function GhgNewPage() {
                         <select
                           value={ent.control_type}
                           onChange={(e) => updateEntity(ei, { control_type: e.target.value as EntityControlType })}
-                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                         >
                           {ENTITY_CONTROL_TYPE_OPTIONS.map((o) => (
                             <option key={o.value} value={o.value}>{o.label}</option>
@@ -1453,7 +1856,7 @@ export default function GhgNewPage() {
                           aria-checked={ent.included}
                           onClick={() => updateEntity(ei, { included: !ent.included })}
                           className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                            ent.included ? "bg-[#006450]" : "bg-gray-300"
+                            ent.included ? "bg-[#27AE60]" : "bg-gray-300"
                           }`}
                         >
                           <span
@@ -1478,7 +1881,7 @@ export default function GhgNewPage() {
                           value={ent.exclusion_reason}
                           onChange={(e) => updateEntity(ei, { exclusion_reason: e.target.value })}
                           placeholder="es. Entità non materiale (<1% emissioni totali)"
-                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                         />
                       </div>
                     )}
@@ -1511,7 +1914,7 @@ export default function GhgNewPage() {
               onChange={(e) => updateForm("included_entities", e.target.value)}
               rows={3}
               placeholder="Elencare le società incluse nel perimetro di consolidamento"
-              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450] resize-none"
+              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60] resize-none"
             />
           </div>
           <div>
@@ -1523,16 +1926,16 @@ export default function GhgNewPage() {
               onChange={(e) => updateForm("notes", e.target.value)}
               rows={3}
               placeholder="Note aggiuntive sul perimetro o esclusioni"
-              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450] resize-none"
+              className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60] resize-none"
             />
           </div>
         </StepCard>
       )}
 
       {/* Step 2: Combustione stazionaria */}
-      {step === 2 && (
-        <StepCard title="Step 2 — Scope 1: Combustione stazionaria">
-          {validationWarning?.step === 2 && (
+      {step === 3 && (
+        <StepCard title="Step 3 — Scope 1: Combustione stazionaria">
+          {validationWarning?.step === 3 && (
             <div className="bg-amber-50 border border-amber-200 rounded-md px-4 py-3 flex items-center justify-between mb-2">
               <p className="text-sm text-amber-800">{validationWarning.message}</p>
               <div className="flex gap-2">
@@ -1600,7 +2003,7 @@ export default function GhgNewPage() {
                     value={src.source_name}
                     onChange={(e) => updateStationary(si, { source_name: e.target.value })}
                     placeholder="es. Caldaia sede Milano"
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   />
                 </div>
                 <div>
@@ -1614,7 +2017,7 @@ export default function GhgNewPage() {
                       const opt = STATIONARY_FUEL_OPTIONS.find((f) => f.value === ft);
                       updateStationary(si, { fuel_type: ft, unit: opt?.unit || "kg" });
                     }}
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   >
                     {STATIONARY_FUEL_GROUPS.map((g) => (
                       <optgroup key={g.label} label={g.label}>
@@ -1644,20 +2047,20 @@ export default function GhgNewPage() {
                         onChange={(e) =>
                           updateMonthly("stationary_sources", si, mi, Number(e.target.value) || 0)
                         }
-                        className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                        className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                       />
                     </div>
                   ))}
                 </div>
                 <p className="text-xs text-[var(--muted)] mt-2">
                   Totale annuo: {total.toLocaleString("it-IT")} {fuelOpt?.unit || src.unit}
-                  {total > 0 && <> · <strong>{tco2e.toFixed(4)} tCO₂e</strong></>}
+                  {total > 0 && <> · <strong>{itN(tco2e, 4)} tCO₂e</strong></>}
                 </p>
                 {(() => {
                   const gb = calcGasBreakdown(src.fuel_type, total);
                   return gb.hasDetail && total > 0 ? (
                     <p className="text-[10px] text-[var(--muted)]">
-                      ↳ CO₂: {gb.co2.toFixed(3)} | CH₄: {gb.ch4.toFixed(3)} | N₂O: {gb.n2o.toFixed(3)} tCO₂e
+                      ↳ CO₂: {itN(gb.co2, 3)} | CH₄: {itN(gb.ch4, 3)} | N₂O: {itN(gb.n2o, 3)} tCO₂e
                     </p>
                   ) : null;
                 })()}
@@ -1665,7 +2068,7 @@ export default function GhgNewPage() {
 
               {isBiogenic && total > 0 && (
                 <div className="bg-orange-50 border border-orange-200 rounded-md px-3 py-2 text-xs text-orange-800 space-y-1">
-                  <p>Emissioni biogeniche: <strong>{tco2e.toFixed(4)} tCO₂e</strong> (informativo — non in inventario fossile)</p>
+                  <p>Emissioni biogeniche: <strong>{itN(tco2e, 4)} tCO₂e</strong> (informativo — non in inventario fossile)</p>
                   <p className="italic">ISO 14064-1 §6.5 — le emissioni biogeniche vanno riportate separatamente</p>
                 </div>
               )}
@@ -1680,6 +2083,8 @@ export default function GhgNewPage() {
                 onChangeEfMode={(v) => updateStationary(si, { ef_mode: v })}
                 onChangeEfValue={(v) => updateStationary(si, { ef_value: v })}
                 onChangeEfReference={(v) => updateStationary(si, { ef_reference: v })}
+                sourceType="stationary"
+                fuelType={src.fuel_type}
               />
             </div>
             );
@@ -1697,8 +2102,8 @@ export default function GhgNewPage() {
       )}
 
       {/* Step 3: Combustione mobile */}
-      {step === 3 && (
-        <StepCard title="Step 3 — Scope 1: Combustione mobile">
+      {step === 4 && (
+        <StepCard title="Step 4 — Scope 1: Combustione mobile">
           {form.fleet_vehicles.length === 0 && (
             <p className="text-sm text-[var(--muted)]">
               Nessun veicolo inserito. Aggiungi un veicolo per calcolare le emissioni da trasporto.
@@ -1744,7 +2149,7 @@ export default function GhgNewPage() {
                     value={v.plate}
                     onChange={(e) => updateVehicle(vi, { plate: e.target.value.toUpperCase() })}
                     placeholder="AA000BB"
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   />
                 </div>
                 <div>
@@ -1754,7 +2159,7 @@ export default function GhgNewPage() {
                   <select
                     value={v.fuel_type}
                     onChange={(e) => updateVehicle(vi, { fuel_type: e.target.value as FuelType })}
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   >
                     {MOBILE_FUEL_GROUPS.map((g) => (
                       <optgroup key={g.label} label={g.label}>
@@ -1781,7 +2186,7 @@ export default function GhgNewPage() {
                             km_annual: e.target.value ? Number(e.target.value) : null,
                           })
                         }
-                        className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                        className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                       />
                     </div>
                     <div>
@@ -1799,7 +2204,7 @@ export default function GhgNewPage() {
                           })
                         }
                         placeholder="kWh consumati"
-                        className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                        className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                       />
                     </div>
                   </>
@@ -1819,7 +2224,7 @@ export default function GhgNewPage() {
                             liters_annual: e.target.value ? Number(e.target.value) : null,
                           })
                         }
-                        className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                        className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                       />
                     </div>
                     <div>
@@ -1836,7 +2241,7 @@ export default function GhgNewPage() {
                             km_annual: e.target.value ? Number(e.target.value) : null,
                           })
                         }
-                        className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                        className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                       />
                     </div>
                   </>
@@ -1863,7 +2268,7 @@ export default function GhgNewPage() {
                       const gb = calcGasBreakdown(v.fuel_type, vc.quantity);
                       return gb.hasDetail ? (
                         <p className="text-[10px] text-[var(--muted)]">
-                          ↳ CO₂: {gb.co2.toFixed(3)} | CH₄: {gb.ch4.toFixed(3)} | N₂O: {gb.n2o.toFixed(3)} tCO₂e
+                          ↳ CO₂: {itN(gb.co2, 3)} | CH₄: {itN(gb.ch4, 3)} | N₂O: {itN(gb.n2o, 3)} tCO₂e
                         </p>
                       ) : null;
                     })()}
@@ -1880,7 +2285,7 @@ export default function GhgNewPage() {
                   onChange={(e) =>
                     updateVehicle(vi, { usage_category: e.target.value as UsageCategory })
                   }
-                  className="w-full max-w-xs border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                  className="w-full max-w-xs border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                 >
                   {USAGE_CATEGORY_OPTIONS.map((o) => (
                     <option key={o.value} value={o.value}>{o.label}</option>
@@ -1898,6 +2303,8 @@ export default function GhgNewPage() {
                 onChangeEfMode={(val) => updateVehicle(vi, { ef_mode: val })}
                 onChangeEfValue={(val) => updateVehicle(vi, { ef_value: val })}
                 onChangeEfReference={(val) => updateVehicle(vi, { ef_reference: val })}
+                sourceType="mobile"
+                fuelType={v.fuel_type}
               />
             </div>
             );
@@ -1917,8 +2324,8 @@ export default function GhgNewPage() {
       )}
 
       {/* Step 4: HFC refrigeranti */}
-      {step === 4 && (
-        <StepCard title="Step 4 — Scope 1: HFC refrigeranti">
+      {step === 5 && (
+        <StepCard title="Step 5 — Scope 1: HFC refrigeranti">
           {form.hfc_gases.length === 0 && (
             <p className="text-sm text-[var(--muted)]">
               Nessun gas refrigerante inserito. Aggiungi un gas se l&apos;azienda utilizza impianti di climatizzazione o refrigerazione.
@@ -1953,7 +2360,7 @@ export default function GhgNewPage() {
                   <select
                     value={h.gas_name}
                     onChange={(e) => updateHfc(hi, { gas_name: e.target.value })}
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   >
                     {HFC_GAS_GROUPS.map((group) => (
                       <optgroup key={group.label} label={group.label}>
@@ -1980,7 +2387,7 @@ export default function GhgNewPage() {
                         kg_annual: e.target.value ? Number(e.target.value) : null,
                       })
                     }
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   />
                 </div>
               </div>
@@ -1995,6 +2402,8 @@ export default function GhgNewPage() {
                 onChangeEfMode={(val) => updateHfc(hi, { ef_mode: val })}
                 onChangeEfValue={(val) => updateHfc(hi, { ef_value: val })}
                 onChangeEfReference={(val) => updateHfc(hi, { ef_reference: val })}
+                sourceType="hfc"
+                fuelType={h.gas_name}
               />
             </div>
           ))}
@@ -2011,7 +2420,7 @@ export default function GhgNewPage() {
       )}
 
       {/* Step 5: Elettricità */}
-      {step === 5 && (() => {
+      {step === 6 && (() => {
         // Pre-compute totals for footer
         const totalLocation = form.electricity_pods.reduce((sum, p) => {
           const tc = p.monthly.reduce((a, b) => a + (b || 0), 0);
@@ -2030,7 +2439,7 @@ export default function GhgNewPage() {
           return sum + calcMarketEmissions(p, nkwh, pEf, tc);
         }, 0);
         return (
-        <StepCard title="Step 5 — Scope 2: Elettricità">
+        <StepCard title="Step 6 — Scope 2: Elettricità">
           <p className="text-xs text-[var(--muted)] -mt-2 mb-4 italic">
             Le emissioni elettricità sono Scope 2 (location-based).
             Per sedi estere viene usato il fattore nazionale IEA 2023.
@@ -2088,7 +2497,7 @@ export default function GhgNewPage() {
                     value={pod.site_name}
                     onChange={(e) => updatePod(pi, { site_name: e.target.value })}
                     placeholder="es. Ufficio Milano"
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   />
                 </div>
                 <div>
@@ -2098,7 +2507,7 @@ export default function GhgNewPage() {
                   <select
                     value={pod.country}
                     onChange={(e) => updatePod(pi, { country: e.target.value })}
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   >
                     {COUNTRY_EF_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>
@@ -2111,7 +2520,7 @@ export default function GhgNewPage() {
 
               {/* EF from country */}
               <div className="bg-gray-50 rounded-md px-3 py-2 text-xs text-[var(--muted)]">
-                Fattore emissione location-based ({countryOpt?.label || pod.country}): <strong>{stdEf.value.toFixed(7)}</strong> {stdEf.unit}
+                Fattore emissione location-based ({countryOpt?.label || pod.country}): <strong>{itN(stdEf.value, 7)}</strong> {stdEf.unit}
               </div>
 
               {/* Row 2: POD + Tipo contratto */}
@@ -2125,7 +2534,7 @@ export default function GhgNewPage() {
                     value={pod.pod_code}
                     onChange={(e) => updatePod(pi, { pod_code: e.target.value })}
                     placeholder="IT001E..."
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   />
                 </div>
                 <div>
@@ -2137,7 +2546,7 @@ export default function GhgNewPage() {
                     onChange={(e) =>
                       updatePod(pi, { contract_type: e.target.value as ContractType })
                     }
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   >
                     {CONTRACT_TYPE_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
@@ -2163,7 +2572,7 @@ export default function GhgNewPage() {
                         onChange={(e) =>
                           updateMonthly("electricity_pods", pi, mi, Number(e.target.value) || 0)
                         }
-                        className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                        className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                       />
                     </div>
                   ))}
@@ -2185,7 +2594,7 @@ export default function GhgNewPage() {
                       aria-checked={pod.has_fv}
                       onClick={() => updatePod(pi, { has_fv: !pod.has_fv })}
                       className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
-                        pod.has_fv ? "bg-[#006450]" : "bg-gray-300"
+                        pod.has_fv ? "bg-[#27AE60]" : "bg-gray-300"
                       }`}
                     >
                       <span
@@ -2216,7 +2625,7 @@ export default function GhgNewPage() {
                             })
                           }
                           placeholder="0"
-                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                         />
                       </div>
                       <div>
@@ -2235,7 +2644,7 @@ export default function GhgNewPage() {
                             updatePod(pi, { fv_autoconsumato_kwh: Math.min(val, cap) });
                           }}
                           placeholder="0"
-                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                          className="w-full border border-[var(--border)] rounded-md px-2 py-1.5 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                         />
                       </div>
                     </div>
@@ -2288,15 +2697,16 @@ export default function GhgNewPage() {
                 onChangeEfMode={(val) => updatePod(pi, { ef_mode: val })}
                 onChangeEfValue={(val) => updatePod(pi, { ef_value: val })}
                 onChangeEfReference={(val) => updatePod(pi, { ef_reference: val })}
+                sourceType="electricity"
               />
 
               {/* Location-based subtotal */}
-              <div className="bg-[#006450]/5 rounded-md px-3 py-2 flex justify-between items-center">
+              <div className="bg-[#27AE60]/5 rounded-md px-3 py-2 flex justify-between items-center">
                 <span className="text-sm text-[var(--foreground)]">
                   Emissioni location-based ({netKwh.toLocaleString("it-IT")} kWh netti)
                 </span>
                 <span className="text-sm font-semibold" style={{ color: GHG_GREEN }}>
-                  {locationSub.toFixed(4)} tCO₂e
+                  {itN(locationSub, 4)} tCO₂e
                 </span>
               </div>
 
@@ -2313,7 +2723,7 @@ export default function GhgNewPage() {
                     onChange={(e) =>
                       updatePod(pi, { market_instrument: e.target.value as MarketInstrument })
                     }
-                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                    className="w-full border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                   >
                     {MARKET_INSTRUMENT_OPTIONS.map((o) => (
                       <option key={o.value} value={o.value}>{o.label}</option>
@@ -2342,7 +2752,7 @@ export default function GhgNewPage() {
                         })
                       }
                       placeholder="MWh coperti da certificato"
-                      className="w-full max-w-xs border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                      className="w-full max-w-xs border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                     />
                     <p className="text-xs text-[var(--muted)] mt-1">
                       = {Math.min(pod.market_certified_kwh, netKwh).toLocaleString("it-IT")} kWh certificati
@@ -2366,7 +2776,7 @@ export default function GhgNewPage() {
                       onChange={(e) =>
                         updatePod(pi, { market_ppa_coverage: Number(e.target.value) })
                       }
-                      className="w-full max-w-xs accent-[#006450]"
+                      className="w-full max-w-xs accent-[#27AE60]"
                     />
                     <p className="text-xs text-[var(--muted)] mt-1">
                       {Math.round(netKwh * pod.market_ppa_coverage / 100).toLocaleString("it-IT")} kWh
@@ -2392,7 +2802,7 @@ export default function GhgNewPage() {
                         })
                       }
                       placeholder="es. 0.000150"
-                      className="w-full max-w-xs border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30 focus:border-[#006450]"
+                      className="w-full max-w-xs border border-[var(--border)] rounded-md px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30 focus:border-[#27AE60]"
                     />
                   </div>
                 )}
@@ -2406,7 +2816,7 @@ export default function GhgNewPage() {
                     )}
                   </span>
                   <span className="text-sm font-semibold text-blue-700">
-                    {marketSub.toFixed(4)} tCO₂e
+                    {itN(marketSub, 4)} tCO₂e
                   </span>
                 </div>
               </div>
@@ -2416,7 +2826,7 @@ export default function GhgNewPage() {
                 <div className="bg-gray-50 rounded-md px-3 py-2 space-y-1">
                   <p className="text-sm text-[var(--foreground)]">
                     ⚡ Emissioni evitate da FV immesso in rete:{" "}
-                    <strong>{(fvImmesso * stdEf.value).toFixed(4)} tCO₂e</strong>
+                    <strong>{itN(fvImmesso * stdEf.value, 4)} tCO₂e</strong>
                   </p>
                   <p className="text-xs text-[var(--muted)] italic">
                     Riportate a fini informativi — non sottratte dall&apos;inventario GHG secondo ISO 14064-1 §6.5
@@ -2446,7 +2856,7 @@ export default function GhgNewPage() {
                   Totale Scope 2 location-based
                 </span>
                 <span className="text-base font-bold" style={{ color: GHG_GREEN }}>
-                  {totalLocation.toFixed(4)} tCO₂e
+                  {itN(totalLocation, 4)} tCO₂e
                 </span>
               </div>
               <div className="flex justify-between items-center">
@@ -2454,7 +2864,7 @@ export default function GhgNewPage() {
                   Totale Scope 2 market-based
                 </span>
                 <span className="text-base font-bold text-blue-700">
-                  {totalMarket.toFixed(4)} tCO₂e
+                  {itN(totalMarket, 4)} tCO₂e
                 </span>
               </div>
 
@@ -2476,7 +2886,7 @@ export default function GhgNewPage() {
       })()}
 
       {/* Step 6: Revisione */}
-      {step === 6 && (() => {
+      {step === 7 && (() => {
         const approachLabel = CONSOLIDATION_APPROACH_OPTIONS.find(
           (o) => o.value === form.consolidation_approach
         )?.label || form.consolidation_approach;
@@ -2491,7 +2901,7 @@ export default function GhgNewPage() {
         // STATE A — Before generate
         if (!calcGenerated) {
           return (
-            <StepCard title="Step 6 — Revisione e calcolo GHG">
+            <StepCard title="Step 7 — Revisione e calcolo GHG">
               <div className="space-y-3">
                 <div className="flex items-center gap-2 text-sm">
                   <span className="text-green-600">&#10003;</span>
@@ -2620,11 +3030,11 @@ export default function GhgNewPage() {
         const warnings: string[] = [];
         if (hasIncomplete) warnings.push("Alcune fonti/sedi incomplete sono state ignorate nel calcolo");
         summary.forEach((r) => {
-          if (r.uncertainty > 15) warnings.push(`${r.source}: incertezza elevata (±${r.uncertainty.toFixed(1)}%)`);
+          if (r.uncertainty > 15) warnings.push(`${r.source}: incertezza elevata (±${itN(r.uncertainty, 1)}%)`);
         });
 
         return (
-          <StepCard title="Step 6 — Riepilogo emissioni GHG">
+          <StepCard title="Step 7 — Riepilogo emissioni GHG">
             {/* Saved confirmation banner */}
             {reportSaved && (
               <div className="bg-green-50 border border-green-300 rounded-md px-4 py-3 text-sm text-green-800 -mt-1 mb-2">
@@ -2740,24 +3150,24 @@ export default function GhgNewPage() {
             <div className="space-y-2 text-sm">
               <h3 className="font-semibold text-[var(--foreground)]">Scope 1 — Emissioni dirette</h3>
               <div className="pl-4 space-y-1">
-                <div className="flex justify-between"><span className="text-[var(--muted)]">Combustione stazionaria</span><span className="font-medium">{stazionarioTot.toFixed(2)} tCO₂e</span></div>
-                <div className="flex justify-between"><span className="text-[var(--muted)]">Combustione mobile</span><span className="font-medium">{mobileTot.toFixed(2)} tCO₂e</span></div>
-                <div className="flex justify-between"><span className="text-[var(--muted)]">Emissioni fuggitive HFC</span><span className="font-medium">{hfcTot.toFixed(2)} tCO₂e</span></div>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">Combustione stazionaria</span><span className="font-medium">{itN(stazionarioTot, 2)} tCO₂e</span></div>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">Combustione mobile</span><span className="font-medium">{itN(mobileTot, 2)} tCO₂e</span></div>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">Emissioni fuggitive HFC</span><span className="font-medium">{itN(hfcTot, 2)} tCO₂e</span></div>
                 {totalBiogenic > 0 && (
-                  <div className="flex justify-between text-orange-700"><span>Biogeniche (informativo)</span><span className="font-medium">{totalBiogenic.toFixed(2)} tCO₂e</span></div>
+                  <div className="flex justify-between text-orange-700"><span>Biogeniche (informativo)</span><span className="font-medium">{itN(totalBiogenic, 2)} tCO₂e</span></div>
                 )}
               </div>
-              <div className="flex justify-between font-semibold border-t border-gray-200 pt-1"><span>Totale Scope 1</span><span style={{ color: GHG_GREEN }}>{totalScope1.toFixed(2)} tCO₂e</span></div>
+              <div className="flex justify-between font-semibold border-t border-gray-200 pt-1"><span>Totale Scope 1</span><span style={{ color: GHG_GREEN }}>{itN(totalScope1, 2)} tCO₂e</span></div>
 
               <h3 className="font-semibold text-[var(--foreground)] pt-2">Scope 2 — Emissioni indirette energia</h3>
               <div className="pl-4 space-y-1">
-                <div className="flex justify-between"><span className="text-[var(--muted)]">Location-based</span><span className="font-medium">{locationScope2.toFixed(2)} tCO₂e</span></div>
-                <div className="flex justify-between"><span className="text-[var(--muted)]">Market-based</span><span className="font-medium text-blue-700">{marketScope2.toFixed(2)} tCO₂e</span></div>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">Location-based</span><span className="font-medium">{itN(locationScope2, 2)} tCO₂e</span></div>
+                <div className="flex justify-between"><span className="text-[var(--muted)]">Market-based</span><span className="font-medium text-blue-700">{itN(marketScope2, 2)} tCO₂e</span></div>
               </div>
 
               <div className="flex justify-between font-bold border-t-2 border-gray-300 pt-2 text-base">
                 <span>TOTALE (Scope 1 + Scope 2 location)</span>
-                <span style={{ color: GHG_GREEN }}>{grandTotal.toFixed(2)} tCO₂e</span>
+                <span style={{ color: GHG_GREEN }}>{itN(grandTotal, 2)} tCO₂e</span>
               </div>
             </div>
 
@@ -2775,34 +3185,34 @@ export default function GhgNewPage() {
                 <tbody>
                   <tr className="border-b border-gray-100">
                     <td className="py-1.5 px-2">CO₂ fossile</td>
-                    <td className="py-1.5 px-2 text-right">{gasBreakdown.co2_fossil.toFixed(3)}</td>
-                    <td className="py-1.5 px-2 text-right">{gasBreakdown.total_co2eq > 0 ? ((gasBreakdown.co2_fossil / gasBreakdown.total_co2eq) * 100).toFixed(1) : "0"}%</td>
+                    <td className="py-1.5 px-2 text-right">{itN(gasBreakdown.co2_fossil, 3)}</td>
+                    <td className="py-1.5 px-2 text-right">{gasBreakdown.total_co2eq > 0 ? itN((gasBreakdown.co2_fossil / gasBreakdown.total_co2eq) * 100, 1) : "0"}%</td>
                   </tr>
                   <tr className="border-b border-gray-100">
                     <td className="py-1.5 px-2">CH₄</td>
-                    <td className="py-1.5 px-2 text-right">{gasBreakdown.ch4.toFixed(3)}</td>
-                    <td className="py-1.5 px-2 text-right">{gasBreakdown.total_co2eq > 0 ? ((gasBreakdown.ch4 / gasBreakdown.total_co2eq) * 100).toFixed(1) : "0"}%</td>
+                    <td className="py-1.5 px-2 text-right">{itN(gasBreakdown.ch4, 3)}</td>
+                    <td className="py-1.5 px-2 text-right">{gasBreakdown.total_co2eq > 0 ? itN((gasBreakdown.ch4 / gasBreakdown.total_co2eq) * 100, 1) : "0"}%</td>
                   </tr>
                   <tr className="border-b border-gray-100">
                     <td className="py-1.5 px-2">N₂O</td>
-                    <td className="py-1.5 px-2 text-right">{gasBreakdown.n2o.toFixed(3)}</td>
-                    <td className="py-1.5 px-2 text-right">{gasBreakdown.total_co2eq > 0 ? ((gasBreakdown.n2o / gasBreakdown.total_co2eq) * 100).toFixed(1) : "0"}%</td>
+                    <td className="py-1.5 px-2 text-right">{itN(gasBreakdown.n2o, 3)}</td>
+                    <td className="py-1.5 px-2 text-right">{gasBreakdown.total_co2eq > 0 ? itN((gasBreakdown.n2o / gasBreakdown.total_co2eq) * 100, 1) : "0"}%</td>
                   </tr>
                   <tr className="border-b border-gray-100">
                     <td className="py-1.5 px-2">HFC / PFC / SF₆</td>
-                    <td className="py-1.5 px-2 text-right">{gasBreakdown.hfc.toFixed(3)}</td>
-                    <td className="py-1.5 px-2 text-right">{gasBreakdown.total_co2eq > 0 ? ((gasBreakdown.hfc / gasBreakdown.total_co2eq) * 100).toFixed(1) : "0"}%</td>
+                    <td className="py-1.5 px-2 text-right">{itN(gasBreakdown.hfc, 3)}</td>
+                    <td className="py-1.5 px-2 text-right">{gasBreakdown.total_co2eq > 0 ? itN((gasBreakdown.hfc / gasBreakdown.total_co2eq) * 100, 1) : "0"}%</td>
                   </tr>
                   <tr className="border-t-2 border-gray-300 font-semibold">
                     <td className="py-1.5 px-2">TOTALE</td>
-                    <td className="py-1.5 px-2 text-right">{gasBreakdown.total_co2eq.toFixed(3)}</td>
+                    <td className="py-1.5 px-2 text-right">{itN(gasBreakdown.total_co2eq, 3)}</td>
                     <td className="py-1.5 px-2 text-right">100%</td>
                   </tr>
                 </tbody>
               </table>
               {gasBreakdown.co2_biogenic > 0 && (
                 <div className="mt-2 text-xs text-[var(--muted)]">
-                  <span>CO₂ biogenica (informativo): <strong>{gasBreakdown.co2_biogenic.toFixed(3)} tCO₂e</strong></span>
+                  <span>CO₂ biogenica (informativo): <strong>{itN(gasBreakdown.co2_biogenic, 3)} tCO₂e</strong></span>
                   <p className="italic">Non inclusa nel totale — ISO 14064-1 §6.5</p>
                 </div>
               )}
@@ -2823,16 +3233,16 @@ export default function GhgNewPage() {
                   {summary.map((row, i) => (
                     <tr key={i} className="border-b border-gray-100">
                       <td className="py-1.5 px-2 text-xs">{row.source}</td>
-                      <td className="py-1.5 px-2 text-right">{row.tco2e.toFixed(3)}</td>
-                      <td className="py-1.5 px-2 text-center text-xs">±{row.uncertainty.toFixed(1)}%</td>
+                      <td className="py-1.5 px-2 text-right">{itN(row.tco2e, 3)}</td>
+                      <td className="py-1.5 px-2 text-center text-xs">±{itN(row.uncertainty, 1)}%</td>
                       <td className="py-1.5 px-2 text-center"><UncertaintyBadge uncertainty={row.uncertainty} /></td>
                     </tr>
                   ))}
                   {summary.length > 0 && (
                     <tr className="border-t-2 border-gray-300 font-semibold">
                       <td className="py-2 px-2">TOTALE</td>
-                      <td className="py-2 px-2 text-right">{grandTotal.toFixed(3)}</td>
-                      <td className="py-2 px-2 text-center">±{totalWeightedUnc.toFixed(1)}%</td>
+                      <td className="py-2 px-2 text-right">{itN(grandTotal, 3)}</td>
+                      <td className="py-2 px-2 text-center">±{itN(totalWeightedUnc, 1)}%</td>
                       <td className="py-2 px-2 text-center"><UncertaintyBadge uncertainty={totalWeightedUnc} /></td>
                     </tr>
                   )}
@@ -2954,15 +3364,15 @@ export default function GhgNewPage() {
         </button>
         <button
           type="button"
-          disabled={step === 6}
+          disabled={step === TOTAL_STEPS}
           onClick={() => goToStep(step + 1)}
           className="text-white px-4 py-2 rounded-md text-sm font-medium transition-colors disabled:opacity-50 disabled:cursor-not-allowed"
-          style={{ backgroundColor: step === 6 ? "#999" : GHG_GREEN }}
+          style={{ backgroundColor: step === TOTAL_STEPS ? "#999" : GHG_GREEN }}
           onMouseEnter={(e) => {
-            if (step < 6) e.currentTarget.style.backgroundColor = GHG_GREEN_HOVER;
+            if (step < TOTAL_STEPS) e.currentTarget.style.backgroundColor = GHG_GREEN_HOVER;
           }}
           onMouseLeave={(e) => {
-            if (step < 6) e.currentTarget.style.backgroundColor = GHG_GREEN;
+            if (step < TOTAL_STEPS) e.currentTarget.style.backgroundColor = GHG_GREEN;
           }}
         >
           Successivo →

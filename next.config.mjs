@@ -1,4 +1,8 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {};
+const nextConfig = {
+  experimental: {
+    serverComponentsExternalPackages: ["chartjs-node-canvas", "canvas"],
+  },
+};
 
 export default nextConfig;

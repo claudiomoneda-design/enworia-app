@@ -24,7 +24,12 @@
       "Bash(npx tsc:*)",
       "Bash(node -e \"try { require.resolve\\(''recharts''\\); console.log\\(''recharts OK''\\); } catch\\(e\\) { console.log\\(''recharts MISSING''\\); }\")",
       "Bash(node -e \"try { require.resolve\\(''next''\\); console.log\\(''next OK''\\); } catch\\(e\\) { console.log\\(''next MISSING''\\); }\")",
-      "Bash(node -e \"try { require.resolve\\(''react''\\); console.log\\(''react OK''\\); } catch\\(e\\) { console.log\\(''react MISSING''\\); }\")"
+      "Bash(node -e \"try { require.resolve\\(''react''\\); console.log\\(''react OK''\\); } catch\\(e\\) { console.log\\(''react MISSING''\\); }\")",
+      "Bash(node:*)",
+      "Bash(grep -n \"step === \" src/app/clients/[id]/ghg/new/page.tsx)",
+      "Bash(grep:*)",
+      "Read(//tmp/**)",
+      "Bash(wc:*)"
     ]
   }
 }

@@ -33,7 +33,7 @@ export default function ClientsPage() {
         <h1 className="text-2xl font-bold text-[var(--primary)]">Clienti</h1>
         <Link
           href="/clients/new"
-          className="bg-[#1E5C3A] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#174a2e] transition-colors"
+          className="bg-[#27AE60] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#1A8A47] transition-colors"
         >
           + Nuovo cliente
         </Link>
