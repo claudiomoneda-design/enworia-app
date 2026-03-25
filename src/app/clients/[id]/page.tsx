@@ -153,12 +153,16 @@ export default function ClientDetailPage() {
 
   const c = company;
   const latestGhg = ghgReports[0];
-  const completedGhg = ghgReports.find((r) => r.status === "completato" || r.status === "completed");
+  const isComplete = (s: string) => s === "completato" || s === "completed";
+  const completedGhg = ghgReports.find((r) => isComplete(r.status));
   const hasCompletedGhg = !!completedGhg;
-  // Scope 3 unlocked only if GHG completed
+  const completedVsmeBasic = vsmeReports.find((r) => isComplete(r.status)); // TODO: filter by type when available
+  const hasCompletedVsmeBasic = !!completedVsmeBasic;
+  // Scope 3 and VSME Basic unlock in parallel after GHG
+  const vsmeBasicUnlocked = hasCompletedGhg;
   const scope3Unlocked = hasCompletedGhg;
-  // VSME unlocked only if Scope 3 has been done (simplification: check if GHG completed)
-  const vsmeUnlocked = hasCompletedGhg;
+  // VSME Comprehensive requires both VSME Basic AND Scope 3
+  const vsmeCompUnlocked = hasCompletedVsmeBasic && hasCompletedGhg; // Scope 3 check simplified for now
 
   const fmtT = (v: number | null) => v != null && v > 0 ? `${Number(v).toFixed(2)} t` : "—";
 
@@ -210,7 +214,7 @@ export default function ClientDetailPage() {
         )}
       </div>
 
-      {/* ═══ 3. TRE MODULI IN SEQUENZA ═══ */}
+      {/* ═══ 3. QUATTRO MODULI IN SEQUENZA ═══ */}
 
       {/* ── MODULO 1: GHG Scope 1+2 ── */}
       <div className="bg-white rounded-lg border border-gray-200 p-5">
@@ -220,14 +224,13 @@ export default function ClientDetailPage() {
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-[#1C2B28]">Calcolo GHG Scope 1+2</h3>
               {latestGhg && (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${(latestGhg.status === "completato" || latestGhg.status === "completed") ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
-                  {(latestGhg.status === "completato" || latestGhg.status === "completed") ? "Completato" : "Bozza"}
+                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isComplete(latestGhg.status) ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                  {isComplete(latestGhg.status) ? "Completato" : "Bozza"}
                 </span>
               )}
             </div>
             <p className="text-xs text-gray-400 mt-1">Emissioni dirette e da energia acquistata — ISO 14064-1</p>
 
-            {/* Metrics if data exists */}
             {latestGhg && Number(latestGhg.total_co2eq ?? 0) > 0 && (
               <div className="flex gap-6 mt-3 py-2 px-3 bg-gray-50 rounded-md">
                 <Metric label="Scope 1" value={fmtT(latestGhg.scope1_total)} color="#15803d" />
@@ -236,21 +239,19 @@ export default function ClientDetailPage() {
               </div>
             )}
 
-            {/* Stepper */}
             <MiniStepper steps={GHG_STEPS} currentKey={latestGhg?.step_corrente || "modalita"} />
 
-            {/* Actions */}
             <div className="flex items-center gap-3 mt-4">
               <button type="button"
                 onClick={() => {
-                  if (latestGhg && latestGhg.status !== "completato" && latestGhg.status !== "completed") {
+                  if (latestGhg && !isComplete(latestGhg.status)) {
                     router.push(`/clients/${id}/ghg/${latestGhg.id}/edit`);
                   } else {
                     setGhgModal(true); setGhgExisting(null); setGhgNewYear(new Date().getFullYear() - 1);
                   }
                 }}
                 className="text-white px-4 py-2 rounded-md text-sm font-medium" style={{ backgroundColor: GHG_GREEN }}>
-                {latestGhg && latestGhg.status !== "completato" && latestGhg.status !== "completed"
+                {latestGhg && !isComplete(latestGhg.status)
                   ? `Continua → ${GHG_STEPS.find(s => s.key === (latestGhg.step_corrente || "modalita"))?.label || ""}`
                   : "+ Nuovo calcolo GHG"}
               </button>
@@ -262,13 +263,41 @@ export default function ClientDetailPage() {
         </div>
       </div>
 
-      {/* ── MODULO 2: Scope 3 ── */}
+      {/* ── MODULO 2: VSME Basic ── */}
+      <div className={`bg-white rounded-lg border p-5 ${vsmeBasicUnlocked ? "border-gray-200" : "border-gray-100 opacity-75"}`}>
+        <div className="flex items-start gap-4">
+          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: vsmeBasicUnlocked ? GHG_GREEN : "#E2EAE8", color: vsmeBasicUnlocked ? "#fff" : "#999", flexShrink: 0 }}>2</div>
+          <div className="flex-1">
+            <div className="flex items-center justify-between">
+              <h3 className="text-sm font-semibold text-[#1C2B28]">VSME Basic</h3>
+              {completedVsmeBasic && <span className="text-[10px] px-2 py-0.5 rounded-full font-medium bg-green-100 text-green-700">Completato</span>}
+            </div>
+            <p className="text-xs text-gray-400 mt-1">Report ESG di base per PMI europee · Standard EFRAG VSME</p>
+
+            {vsmeBasicUnlocked ? (
+              <>
+                <MiniStepper steps={VSME_STEPS} currentKey="dati_generali" />
+                <div className="mt-4">
+                  <button type="button" onClick={() => { setVsmeModal(true); setManualMode(false); }}
+                    className="text-white px-4 py-2 rounded-md text-sm font-medium" style={{ backgroundColor: GHG_GREEN }}>
+                    {completedVsmeBasic ? "Modifica VSME Basic" : "Crea VSME Basic"}
+                  </button>
+                </div>
+              </>
+            ) : (
+              <LockBanner text="Completa prima il calcolo GHG Scope 1+2" />
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* ── MODULO 3: Scope 3 ── */}
       <div className={`bg-white rounded-lg border p-5 ${scope3Unlocked ? "border-gray-200" : "border-gray-100 opacity-75"}`}>
         <div className="flex items-start gap-4">
-          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: scope3Unlocked ? "#2563eb" : "#E2EAE8", color: scope3Unlocked ? "#fff" : "#999", flexShrink: 0 }}>2</div>
+          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: scope3Unlocked ? "#2563eb" : "#E2EAE8", color: scope3Unlocked ? "#fff" : "#999", flexShrink: 0 }}>3</div>
           <div className="flex-1">
             <h3 className="text-sm font-semibold text-[#1C2B28]">Scope 3 — Emissioni indirette</h3>
-            <p className="text-xs text-gray-400 mt-1">Screening significatività e quantificazione categorie</p>
+            <p className="text-xs text-gray-400 mt-1">Screening significatività e quantificazione · ISO 14064-1</p>
 
             {scope3Unlocked && completedGhg ? (
               <>
@@ -281,32 +310,36 @@ export default function ClientDetailPage() {
                 </div>
               </>
             ) : (
-              <LockBanner text="Completa prima il calcolo GHG Scope 1+2 — lo step Revisione deve essere completato" />
+              <LockBanner text="Completa prima il calcolo GHG Scope 1+2" />
             )}
           </div>
         </div>
       </div>
 
-      {/* ── MODULO 3: VSME ── */}
-      <div className={`bg-white rounded-lg border p-5 ${vsmeUnlocked ? "border-gray-200" : "border-gray-100 opacity-75"}`}>
+      {/* ── MODULO 4: VSME Comprehensive ── */}
+      <div className={`bg-white rounded-lg border p-5 ${vsmeCompUnlocked ? "border-gray-200" : "border-gray-100 opacity-75"}`}>
         <div className="flex items-start gap-4">
-          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: vsmeUnlocked ? GHG_GREEN : "#E2EAE8", color: vsmeUnlocked ? "#fff" : "#999", flexShrink: 0 }}>3</div>
+          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: vsmeCompUnlocked ? "#7c3aed" : "#E2EAE8", color: vsmeCompUnlocked ? "#fff" : "#999", flexShrink: 0 }}>4</div>
           <div className="flex-1">
-            <h3 className="text-sm font-semibold text-[#1C2B28]">Bilancio VSME</h3>
-            <p className="text-xs text-gray-400 mt-1">Report ESG completo per PMI europee — standard EFRAG VSME</p>
+            <h3 className="text-sm font-semibold text-[#1C2B28]">VSME Comprehensive</h3>
+            <p className="text-xs text-gray-400 mt-1">Report ESG completo con emissioni indirette · Standard EFRAG VSME</p>
 
-            {vsmeUnlocked ? (
+            {vsmeCompUnlocked ? (
               <>
                 <MiniStepper steps={VSME_STEPS} currentKey="dati_generali" />
                 <div className="mt-4">
                   <button type="button" onClick={() => { setVsmeModal(true); setManualMode(false); }}
-                    className="text-white px-4 py-2 rounded-md text-sm font-medium" style={{ backgroundColor: GHG_GREEN }}>
-                    Crea bilancio VSME
+                    className="text-white px-4 py-2 rounded-md text-sm font-medium" style={{ backgroundColor: "#7c3aed" }}>
+                    Crea VSME Comprehensive
                   </button>
                 </div>
               </>
             ) : (
-              <LockBanner text="Completa prima Scope 3" />
+              <LockBanner text={
+                !hasCompletedVsmeBasic && !hasCompletedGhg ? "Completa prima VSME Basic e Scope 3" :
+                !hasCompletedVsmeBasic ? "Completa prima VSME Basic" :
+                "Completa prima Scope 3"
+              } />
             )}
           </div>
         </div>
