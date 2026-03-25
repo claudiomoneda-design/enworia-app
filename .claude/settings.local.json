@@ -35,7 +35,20 @@
       "Bash(curl:*)",
       "Bash(git add:*)",
       "Bash(git commit:*)",
-      "Bash(git push:*)"
+      "Bash(git push:*)",
+      "Bash(cp \"/c/Users/claud/Downloads/import_defra_2025.py\" \"/c/Users/claud/Desktop/enworia/\")",
+      "Bash(cp \"/c/Users/claud/Downloads/ghg-conversion-factors-2025-full-set.xlsx\" \"/c/Users/claud/Desktop/enworia/\")",
+      "Bash(cp \"C:/Users/claud/Downloads/import_defra_2025.py\" \"C:/Users/claud/Desktop/enworia/\")",
+      "Bash(cp \"C:/Users/claud/Downloads/ghg-conversion-factors-2025-full-set.xlsx\" \"C:/Users/claud/Desktop/enworia/\")",
+      "Bash(python:*)",
+      "Bash(py --version)",
+      "Bash(where python:*)",
+      "Bash(where python3:*)",
+      "Bash(where py:*)",
+      "Bash(cp:*)",
+      "Bash(find /c/Users/claud/Desktop/enworia -type f \\\\\\(-name *seed* -o -name *test*data* -o -name *mock* \\\\\\))",
+      "Bash(git log:*)",
+      "Bash(npx supabase:*)"
     ]
   }
 }
