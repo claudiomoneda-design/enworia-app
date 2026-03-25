@@ -45,31 +45,54 @@ export default function ClientsPage() {
 
   useEffect(() => {
     (async () => {
-      const { data: companies } = await supabase.from("companies").select("*").order("created_at", { ascending: false });
-      if (!companies) { setLoading(false); return; }
+      // Step 1: load companies immediately
+      const { data: companies, error: compErr } = await supabase.from("companies").select("*").order("created_at", { ascending: false });
+      if (compErr) { console.error('Companies error:', compErr); setLoading(false); return; }
+      if (!companies || companies.length === 0) { setLoading(false); return; }
 
-      const companyIds = companies.map(c => c.id);
-      const { data: allReports } = await supabase.from("ghg_reports").select("id, company_id, updated_at, status, total_co2eq, scope1_total, scope2_lb_total").in("company_id", companyIds).order("updated_at", { ascending: false });
-      const { data: allEntries } = await supabase.from("energy_entries").select("id, period_id").limit(1000);
-      const { data: allPeriods } = await supabase.from("ghg_periods").select("id, company_id").in("company_id", companyIds);
-
-      const periodToCompany: Record<string, string> = {};
-      (allPeriods || []).forEach(p => { periodToCompany[p.id] = p.company_id; });
-      const entriesPerCompany: Record<string, number> = {};
-      (allEntries || []).forEach(e => { const cid = periodToCompany[e.period_id]; if (cid) entriesPerCompany[cid] = (entriesPerCompany[cid] || 0) + 1; });
-      const reportsPerCompany: Record<string, typeof allReports> = {};
-      (allReports || []).forEach(r => { if (!reportsPerCompany[r.company_id]) reportsPerCompany[r.company_id] = []; reportsPerCompany[r.company_id]!.push(r); });
-
-      const result: ClientRow[] = companies.map(c => {
-        const reports = reportsPerCompany[c.id] || [];
-        const status = getClientStatus(reports as { updated_at?: string; status?: string }[], entriesPerCompany[c.id] || 0);
-        const latest = reports[0];
-        const total = latest ? (Number(latest.total_co2eq ?? 0) || (Number(latest.scope1_total ?? 0) + Number(latest.scope2_lb_total ?? 0))) : 0;
-        return { company: c as Company, status, totalTco2e: total };
-      });
-      result.sort((a, b) => (ORDER[a.status.tipo] ?? 9) - (ORDER[b.status.tipo] ?? 9));
-      setRows(result);
+      // Show clients right away with basic status
+      const basic: ClientRow[] = companies.map(c => ({
+        company: c as Company,
+        status: getClientStatus(null, 0),
+        totalTco2e: 0,
+      }));
+      setRows(basic);
       setLoading(false);
+
+      // Step 2: enrich with reports data in background
+      try {
+        const companyIds = companies.map(c => c.id);
+        const [{ data: allReports }, { data: allPeriods }] = await Promise.all([
+          supabase.from("ghg_reports").select("id, company_id, updated_at, status, total_co2eq, scope1_total, scope2_lb_total").in("company_id", companyIds).order("updated_at", { ascending: false }),
+          supabase.from("ghg_periods").select("id, company_id").in("company_id", companyIds),
+        ]);
+
+        // Count entries per company via periods
+        let entriesPerCompany: Record<string, number> = {};
+        if (allPeriods && allPeriods.length > 0) {
+          const periodIds = allPeriods.map(p => p.id);
+          const { data: allEntries } = await supabase.from("energy_entries").select("id, period_id").in("period_id", periodIds).limit(1000);
+          const periodToCompany: Record<string, string> = {};
+          allPeriods.forEach(p => { periodToCompany[p.id] = p.company_id; });
+          (allEntries || []).forEach(e => { const cid = periodToCompany[e.period_id]; if (cid) entriesPerCompany[cid] = (entriesPerCompany[cid] || 0) + 1; });
+        }
+
+        const reportsPerCompany: Record<string, NonNullable<typeof allReports>> = {};
+        (allReports || []).forEach(r => { if (!reportsPerCompany[r.company_id]) reportsPerCompany[r.company_id] = []; reportsPerCompany[r.company_id].push(r); });
+
+        const enriched: ClientRow[] = companies.map(c => {
+          const reports = reportsPerCompany[c.id] || [];
+          const status = getClientStatus(reports as { updated_at?: string; status?: string }[], entriesPerCompany[c.id] || 0);
+          const latest = reports[0];
+          const total = latest ? (Number(latest.total_co2eq ?? 0) || (Number(latest.scope1_total ?? 0) + Number(latest.scope2_lb_total ?? 0))) : 0;
+          return { company: c as Company, status, totalTco2e: total };
+        });
+        enriched.sort((a, b) => (ORDER[a.status.tipo] ?? 9) - (ORDER[b.status.tipo] ?? 9));
+        setRows(enriched);
+      } catch (err) {
+        console.error('Enrich error:', err);
+        // Keep basic rows — already displayed
+      }
     })();
   }, []);
 
