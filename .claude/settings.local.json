@@ -48,7 +48,10 @@
       "Bash(cp:*)",
       "Bash(find /c/Users/claud/Desktop/enworia -type f \\\\\\(-name *seed* -o -name *test*data* -o -name *mock* \\\\\\))",
       "Bash(git log:*)",
-      "Bash(npx supabase:*)"
+      "Bash(npx supabase:*)",
+      "Bash(for cat:*)",
+      "Bash(do)",
+      "Bash(done)"
     ]
   }
 }
