@@ -8,13 +8,10 @@ import { getClientStatus, type ClientStatus } from "@/lib/clientStatus";
 import EnworiaNode from "@/components/EnworiaNode";
 import type { Company } from "@/types/database";
 
-interface ClientRow {
-  company: Company;
-  status: ClientStatus;
-  totalTco2e: number;
-}
+interface ClientRow { company: Company; status: ClientStatus; totalTco2e: number }
 
 const BORDER_COLORS: Record<string, string> = { rosso: '#C0392B', giallo: '#C8860A', verde: '#27AE60', grigio: '#E2EAE8' }
+const BORDER_HOVER: Record<string, string> = { rosso: '#A0302B', giallo: '#A86800', verde: '#1A8A47', grigio: '#E2EAE8' }
 const CTA_BG: Record<string, string> = { rosso: '#C0392B', verde: '#27AE60', grigio: '#5A9088' }
 const ORDER: Record<string, number> = { ritardo: 0, in_corso: 1, completo: 2, non_configurato: 3 }
 const FILTERS = [
@@ -24,8 +21,20 @@ const FILTERS = [
   { key: 'completo', label: 'Completati' },
 ]
 
-function initials(name: string) {
-  return name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("")
+function initials(name: string) { return name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("") }
+function pl(n: number, s: string, p: string) { return `${n} ${n === 1 ? s : p}` }
+
+// ── KPI box with optional node ──────────────────────────────────────────────
+function KpiBox({ label, value, color, bg, border, nodo }: { label: string; value: number; color: string; bg: string; border: string; nodo?: string }) {
+  return (
+    <div style={{ flex: 1, padding: "12px 16px", borderRadius: 10, background: bg, border: `1px solid ${border}` }}>
+      <div style={{ fontSize: 10, color: "#8AB5AC", textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        {nodo && <EnworiaNode stato={nodo} size={16} />}
+        <span style={{ fontSize: 24, fontWeight: 700, color, fontFamily: "var(--font-dm-mono), monospace" }}>{value}</span>
+      </div>
+    </div>
+  )
 }
 
 export default function ClientsPage() {
@@ -39,39 +48,25 @@ export default function ClientsPage() {
       const { data: companies } = await supabase.from("companies").select("*").order("created_at", { ascending: false });
       if (!companies) { setLoading(false); return; }
 
-      // Load reports and entry counts for all companies
       const companyIds = companies.map(c => c.id);
       const { data: allReports } = await supabase.from("ghg_reports").select("id, company_id, updated_at, status, total_co2eq, scope1_total, scope2_lb_total").in("company_id", companyIds).order("updated_at", { ascending: false });
       const { data: allEntries } = await supabase.from("energy_entries").select("id, period_id").limit(1000);
       const { data: allPeriods } = await supabase.from("ghg_periods").select("id, company_id").in("company_id", companyIds);
 
-      // Map periods to company
       const periodToCompany: Record<string, string> = {};
       (allPeriods || []).forEach(p => { periodToCompany[p.id] = p.company_id; });
-
-      // Count entries per company
       const entriesPerCompany: Record<string, number> = {};
-      (allEntries || []).forEach(e => {
-        const cid = periodToCompany[e.period_id];
-        if (cid) entriesPerCompany[cid] = (entriesPerCompany[cid] || 0) + 1;
-      });
-
-      // Group reports per company
+      (allEntries || []).forEach(e => { const cid = periodToCompany[e.period_id]; if (cid) entriesPerCompany[cid] = (entriesPerCompany[cid] || 0) + 1; });
       const reportsPerCompany: Record<string, typeof allReports> = {};
-      (allReports || []).forEach(r => {
-        if (!reportsPerCompany[r.company_id]) reportsPerCompany[r.company_id] = [];
-        reportsPerCompany[r.company_id]!.push(r);
-      });
+      (allReports || []).forEach(r => { if (!reportsPerCompany[r.company_id]) reportsPerCompany[r.company_id] = []; reportsPerCompany[r.company_id]!.push(r); });
 
       const result: ClientRow[] = companies.map(c => {
         const reports = reportsPerCompany[c.id] || [];
-        const fonti = entriesPerCompany[c.id] || 0;
-        const status = getClientStatus(reports as { updated_at?: string; status?: string }[], fonti);
+        const status = getClientStatus(reports as { updated_at?: string; status?: string }[], entriesPerCompany[c.id] || 0);
         const latest = reports[0];
         const total = latest ? (Number(latest.total_co2eq ?? 0) || (Number(latest.scope1_total ?? 0) + Number(latest.scope2_lb_total ?? 0))) : 0;
         return { company: c as Company, status, totalTco2e: total };
       });
-
       result.sort((a, b) => (ORDER[a.status.tipo] ?? 9) - (ORDER[b.status.tipo] ?? 9));
       setRows(result);
       setLoading(false);
@@ -97,32 +92,22 @@ export default function ClientsPage() {
         <Link href="/clients/new" style={{ background: "#27AE60", color: "#fff", padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none" }}>+ Nuovo cliente</Link>
       </div>
 
-      {/* KPI bar */}
+      {/* KPI bar with nodes */}
       <div style={{ display: "flex", gap: 10, marginBottom: 16 }}>
-        {[
-          { label: "Totale", value: counts.tutti, bg: "#fff", border: "#E2EAE8", color: "#1C2B28" },
-          { label: "In corso", value: counts.in_corso, bg: "#fff", border: "#E2EAE8", color: "#C8860A" },
-          { label: "Completati", value: counts.completo, bg: "#fff", border: "#E2EAE8", color: "#1A8A47" },
-          { label: "In ritardo", value: counts.ritardo, bg: counts.ritardo > 0 ? "#FFF8EC" : "#fff", border: counts.ritardo > 0 ? "#E8B84B" : "#E2EAE8", color: "#C0392B" },
-        ].map(k => (
-          <div key={k.label} style={{ flex: 1, padding: "12px 16px", borderRadius: 10, background: k.bg, border: `1px solid ${k.border}` }}>
-            <div style={{ fontSize: 10, color: "#8AB5AC", textTransform: "uppercase", letterSpacing: 0.5 }}>{k.label}</div>
-            <div style={{ fontSize: 22, fontWeight: 700, color: k.color, fontFamily: "var(--font-dm-mono), monospace" }}>{k.value}</div>
-          </div>
-        ))}
+        <KpiBox label="Totale" value={counts.tutti} color="#1C2B28" bg="#fff" border="#E2EAE8" />
+        <KpiBox label="In corso" value={counts.in_corso} color="#C8860A" bg="#fff" border="#E2EAE8" nodo="giallo" />
+        <KpiBox label="Completati" value={counts.completo} color="#1A8A47" bg="#fff" border="#E2EAE8" nodo="verde" />
+        <KpiBox label="In ritardo" value={counts.ritardo} color="#C0392B" bg={counts.ritardo > 0 ? "#FFF8EC" : "#fff"} border={counts.ritardo > 0 ? "#E8B84B" : "#E2EAE8"} nodo="rosso" />
       </div>
 
       {/* Filters */}
       <div style={{ display: "flex", gap: 6, marginBottom: 16 }}>
         {FILTERS.map(f => (
-          <button key={f.key} onClick={() => setFilter(f.key)}
-            style={{
-              fontSize: 12, fontWeight: 500, padding: "6px 14px", borderRadius: 6, cursor: "pointer", border: "none",
-              background: filter === f.key ? "#1C2B28" : "#fff",
-              color: filter === f.key ? "#fff" : "#5A9088",
-              boxShadow: filter !== f.key ? "inset 0 0 0 0.5px #E2EAE8" : "none",
-            }}
-          >
+          <button key={f.key} onClick={() => setFilter(f.key)} style={{
+            fontSize: 12, fontWeight: 500, padding: "6px 14px", borderRadius: 6, cursor: "pointer", border: "none",
+            background: filter === f.key ? "#1C2B28" : "#fff", color: filter === f.key ? "#fff" : "#5A9088",
+            boxShadow: filter !== f.key ? "inset 0 0 0 0.5px #E2EAE8" : "none",
+          }}>
             {f.key === 'ritardo' && counts.ritardo > 0 ? '⚠ ' : ''}{f.label}{f.key !== 'tutti' ? ` (${counts[f.key as keyof typeof counts] || 0})` : ''}
           </button>
         ))}
@@ -131,16 +116,27 @@ export default function ClientsPage() {
       {/* Client rows */}
       {filtered.length === 0 ? (
         <div style={{ padding: "48px 16px", textAlign: "center", color: "#8AB5AC" }}>
-          {rows.length === 0 ? (
-            <>Nessun cliente. <Link href="/clients/new" style={{ color: "#27AE60", fontWeight: 500 }}>Aggiungi il primo →</Link></>
-          ) : "Nessun cliente con questo filtro."}
+          {rows.length === 0 ? <>Nessun cliente. <Link href="/clients/new" style={{ color: "#27AE60", fontWeight: 500 }}>Aggiungi il primo →</Link></> : "Nessun cliente con questo filtro."}
         </div>
       ) : (
         <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+          {/* CSS for hover */}
+          <style>{`
+            .ew-client-row { transition: box-shadow 0.15s, border-color 0.15s; }
+            .ew-client-row:hover { box-shadow: 0 2px 12px rgba(28,43,40,0.09); }
+            .ew-client-row:hover .ew-node { transform: scale(1.08); }
+          `}</style>
+
           {filtered.map(({ company: co, status: st, totalTco2e }) => {
             const borderColor = BORDER_COLORS[st.colore] || '#E2EAE8';
+            const hoverBorder = BORDER_HOVER[st.colore] || '#E2EAE8';
+            // Fix grammar: "1 mancante" vs "3 mancanti"
+            const ctaText = st.cta?.replace(/\((\d+) mancanti\)/, (_, n) => `(${pl(parseInt(n), 'mancante', 'mancanti')})`) || st.cta;
+
             return (
-              <div key={co.id}
+              <div key={co.id} className="ew-client-row"
+                onMouseOver={e => { if (st.colore !== 'grigio') (e.currentTarget as HTMLElement).style.borderLeftColor = hoverBorder; }}
+                onMouseOut={e => { if (st.colore !== 'grigio') (e.currentTarget as HTMLElement).style.borderLeftColor = borderColor; }}
                 style={{
                   display: "flex", alignItems: "center", gap: 14, padding: "14px 18px",
                   background: "#fff", borderRadius: 12, border: "0.5px solid #E2EAE8",
@@ -162,25 +158,31 @@ export default function ClientsPage() {
                   </div>
                 </div>
 
-                {/* Status */}
+                {/* Status + sub + insight */}
                 <div style={{ flex: 1, minWidth: 0 }}>
-                  <div style={{ display: "flex", alignItems: "center", gap: 6 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
                     <EnworiaNode stato={st.colore} size={16} />
                     <span style={{ fontSize: 13, fontWeight: 600, color: "#1C2B28" }}>{st.testo}</span>
-                    {totalTco2e > 0 && (
-                      <span style={{ fontSize: 12, color: "#1A8A47", fontWeight: 600, fontFamily: "var(--font-dm-mono), monospace", marginLeft: 8 }}>{totalTco2e.toFixed(2)} t</span>
-                    )}
                   </div>
                   <div style={{ fontSize: 11, color: st.subColore || "#8AB5AC", marginTop: 2 }}>{st.sub}</div>
                   {st.insight && <div style={{ fontSize: 11, fontWeight: 600, color: st.insightColore || "#8AB5AC", marginTop: 1 }}>{st.insight}</div>}
                 </div>
 
+                {/* Total — separate column */}
+                <div style={{ width: 80, textAlign: "right", flexShrink: 0 }}>
+                  {totalTco2e > 0 ? (
+                    <span style={{ fontSize: 15, fontWeight: 500, color: "#1C2B28", fontFamily: "var(--font-dm-mono), monospace" }}>{totalTco2e.toFixed(2)} t</span>
+                  ) : (
+                    <span style={{ fontSize: 13, color: "#8AB5AC" }}>—</span>
+                  )}
+                </div>
+
                 {/* Actions */}
                 <div style={{ display: "flex", alignItems: "center", gap: 6, flexShrink: 0 }}>
-                  {st.cta && (
+                  {ctaText && (
                     <button onClick={() => router.push(`/clients/${co.id}`)}
                       style={{ fontSize: 12, fontWeight: 700, padding: "6px 14px", borderRadius: 6, border: "none", cursor: "pointer", color: "#fff", background: CTA_BG[st.ctaColore || 'verde'], whiteSpace: "nowrap" }}>
-                      {st.cta}
+                      {ctaText}
                     </button>
                   )}
                   {st.tipo !== 'non_configurato' && (

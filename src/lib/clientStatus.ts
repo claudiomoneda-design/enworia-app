@@ -1,5 +1,6 @@
 const MESI = ['', 'Gennaio', 'Febbraio', 'Marzo', 'Aprile', 'Maggio', 'Giugno', 'Luglio', 'Agosto', 'Settembre', 'Ottobre', 'Novembre', 'Dicembre']
 function getMeseNome(mese: number) { return MESI[((mese - 1 + 12) % 12) + 1] }
+function pl(n: number, s: string, p: string) { return `${n} ${n === 1 ? s : p}` }
 
 export interface ClientStatus {
   tipo: 'non_configurato' | 'ritardo' | 'in_corso' | 'completo'
@@ -36,7 +37,7 @@ export function getClientStatus(
       tipo: 'ritardo', colore: 'rosso',
       testo: `Nessun dato ${getMeseNome(meseCorrente)}`,
       sub: `${giorniFA} giorni senza aggiornamenti`, subColore: '#C0392B',
-      insight: fontiMancanti > 0 ? `${getMeseNome(meseCorrente > 1 ? meseCorrente - 1 : 12)} incompleto (${fontiMancanti} dati mancanti)` : null,
+      insight: fontiMancanti > 0 ? `${getMeseNome(meseCorrente > 1 ? meseCorrente - 1 : 12)} incompleto (${pl(fontiMancanti, 'dato mancante', 'dati mancanti')})` : null,
       cta: `Completa emissioni ${getMeseNome(meseCorrente)}`, ctaColore: 'rosso',
     }
   }
@@ -46,9 +47,9 @@ export function getClientStatus(
       tipo: 'in_corso', colore: 'giallo',
       testo: `${getMeseNome(meseCorrente)} incompleto`,
       sub: `Ultimo aggiornamento: ${giorniLabel}`, subColore: '#8AB5AC',
-      insight: `${fontiMancanti} dati mancanti`,
+      insight: `${pl(fontiMancanti, 'dato mancante', 'dati mancanti')}`,
       insightColore: '#C8860A',
-      cta: `Completa dati energia (${fontiMancanti} mancanti)`, ctaColore: 'verde',
+      cta: `Completa dati energia (${pl(fontiMancanti, 'mancante', 'mancanti')})`, ctaColore: 'verde',
     }
   }
 
