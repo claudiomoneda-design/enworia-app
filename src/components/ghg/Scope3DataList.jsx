@@ -3,7 +3,6 @@ import { useState, useEffect } from 'react'
 import { supabase } from '@/lib/supabase'
 
 const CAT_LABELS = {
-  2: 'Categoria 2 — Energia importata',
   3: 'Categoria 3 — Trasporti',
   4: 'Categoria 4 — Prodotti usati',
   5: 'Categoria 5 — Uso prodotti (valle)',
@@ -32,7 +31,7 @@ export default function Scope3DataList({ reportId, companyId }) {
   useEffect(() => {
     async function load() {
       const [{ data: subs }, { data: scrs }, { data: entries }] = await Promise.all([
-        supabase.from('scope3_subcategories').select('*').order('category_num').order('sub_num'),
+        supabase.from('scope3_subcategories').select('*').neq('category_num', 2).order('category_num').order('sub_num'),
         supabase.from('scope3_screening').select('*').eq('report_id', reportId),
         supabase.from('scope3_entries').select('subcategory_id,co2e_kg').eq('report_id', reportId),
       ])

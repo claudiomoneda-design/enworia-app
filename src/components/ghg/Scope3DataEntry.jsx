@@ -276,17 +276,31 @@ function EntryRow({ row, index, subcategoryId, onUpdate, onRemove, showRemove })
 }
 
 // ─── Main component ─────────────────────────────────────────────────────────
-export default function Scope3DataEntry({ reportId, companyId, subcategoryId, periodId }) {
+export default function Scope3DataEntry({ reportId, companyId, subcategoryId, periodId: periodIdProp }) {
   const [subcategory, setSubcategory] = useState(null)
   const [screening, setScreening] = useState(null)
   const [rows, setRows] = useState([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
   const [saveMsg, setSaveMsg] = useState(null)
+  const [periodId, setPeriodId] = useState(periodIdProp || null)
 
-  // Load subcategory info, screening, and existing entries
+  // Load subcategory info, screening, existing entries, and auto-resolve period
   useEffect(() => {
     async function load() {
+      // Auto-resolve period_id if not passed
+      if (!periodIdProp && companyId) {
+        const { data: latestPeriod } = await supabase.from('ghg_periods')
+          .select('id')
+          .eq('company_id', companyId)
+          .in('status', ['closed', 'complete'])
+          .order('year', { ascending: false })
+          .order('month', { ascending: false, nullsFirst: true })
+          .limit(1)
+          .maybeSingle()
+        if (latestPeriod) setPeriodId(latestPeriod.id)
+      }
+
       // Subcategory
       const { data: sub } = await supabase.from('scope3_subcategories').select('*').eq('id', subcategoryId).single()
       setSubcategory(sub)
