@@ -1624,7 +1624,7 @@ export default function GhgNewPage() {
                           <select
                             value={form[statusKey] as string}
                             onChange={(e) => updateForm(statusKey, e.target.value as CategoryStatus)}
-                            className="border border-[var(--border)] rounded-md px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#006450]/30"
+                            className="border border-[var(--border)] rounded-md px-2 py-1 text-xs bg-white focus:outline-none focus:ring-2 focus:ring-[#27AE60]/30"
                           >
                             <option value="non_rendicontato">Non rendicontato</option>
                             <option value="significativo">Significativo</option>

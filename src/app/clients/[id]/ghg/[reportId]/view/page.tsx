@@ -554,7 +554,7 @@ export default function GhgViewPage() {
               }
             }}
             className="text-white px-3 py-1.5 rounded-md text-sm font-medium transition-colors disabled:opacity-60"
-            style={{ backgroundColor: downloadingPdf ? "#999" : "#006450" }}
+            style={{ backgroundColor: downloadingPdf ? "#999" : "#27AE60" }}
           >
             {downloadingPdf ? "Generazione PDF..." : "Scarica Sintesi Cliente (PDF)"}
           </button>

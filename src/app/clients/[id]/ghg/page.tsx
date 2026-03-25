@@ -18,6 +18,11 @@ interface GhgReportRow {
   total_co2eq: number | null;
 }
 
+function fmtVal(v: number | null) {
+  const n = Number(v ?? 0);
+  return n > 0 ? n.toFixed(2) : null;
+}
+
 export default function GhgListPage() {
   const params = useParams();
   const companyId = params.id as string;
@@ -29,11 +34,7 @@ export default function GhgListPage() {
     (async () => {
       const [{ data: co }, { data: reps }] = await Promise.all([
         supabase.from("companies").select("*").eq("id", companyId).single(),
-        supabase
-          .from("ghg_reports")
-          .select("id, reference_year, report_code, status, scope1_total, scope2_lb_total, scope2_mb_total, total_co2eq")
-          .eq("company_id", companyId)
-          .order("reference_year", { ascending: false }),
+        supabase.from("ghg_reports").select("*").eq("company_id", companyId).order("reference_year", { ascending: false }),
       ]);
       if (co) setCompany(co as Company);
       if (reps) setReports((reps as GhgReportRow[]).map((r) => ({ ...r, year: r.reference_year || r.year })));
@@ -41,88 +42,86 @@ export default function GhgListPage() {
     })();
   }, [companyId]);
 
-  if (loading) return <p className="text-[var(--muted)] text-sm py-8">Caricamento...</p>;
-  if (!company) return <p className="text-red-600 text-sm py-8">Cliente non trovato.</p>;
+  if (loading) return <p style={{ color: "#8AB5AC", fontSize: 14, padding: "32px 0" }}>Caricamento...</p>;
+  if (!company) return <p style={{ color: "#C0392B", fontSize: 14, padding: "32px 0" }}>Cliente non trovato.</p>;
 
   return (
-    <div className="space-y-6" style={{ fontFamily: "Arial, sans-serif" }}>
-      <div className="flex items-center justify-between">
+    <div style={{ maxWidth: 960, margin: "0 auto" }}>
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div>
-          <h1 className="text-2xl font-bold text-[var(--primary)]">
+          <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.4, color: "#1C2B28", margin: 0 }}>
             Report GHG — {company.company_name}
           </h1>
-          <p className="text-sm text-[var(--muted)] mt-1">
+          <p style={{ fontSize: 13, color: "#5A9088", margin: "4px 0 0" }}>
             Inventario emissioni gas serra (Scope 1 &amp; 2)
           </p>
         </div>
-        <div className="flex gap-3">
+        <div style={{ display: "flex", gap: 10 }}>
           <Link
             href={`/clients/${companyId}/ghg/new`}
-            className="bg-[#006450] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#005240] transition-colors"
+            style={{ background: "#27AE60", color: "#fff", padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none" }}
           >
             + Nuovo calcolo GHG
           </Link>
           <Link
             href={`/clients/${companyId}`}
-            className="border border-[var(--border)] text-[var(--muted)] px-4 py-2 rounded-md text-sm hover:bg-gray-50 transition-colors"
+            className="hover:text-[#1C2B28] transition-colors"
+            style={{ color: "#5A9088", fontSize: 13, textDecoration: "none", padding: "10px 0" }}
           >
-            Torna al cliente
+            ← Torna al cliente
           </Link>
         </div>
       </div>
 
       {reports.length === 0 ? (
-        <div className="bg-white rounded-lg border border-[var(--border)] p-12 text-center">
-          <p className="text-[var(--muted)] text-sm">
+        <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #E2EAE8", padding: "48px 20px", textAlign: "center" }}>
+          <p style={{ color: "#8AB5AC", fontSize: 14 }}>
             Nessun report GHG — clicca &quot;+ Nuovo calcolo GHG&quot; per iniziare
           </p>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-[var(--border)] overflow-hidden">
-          <table className="w-full text-sm">
+        <div style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #E2EAE8", overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
             <thead>
-              <tr className="bg-[#006450] text-white text-left">
-                <th className="px-5 py-3 font-semibold">Anno</th>
-                <th className="px-5 py-3 font-semibold">Stato</th>
-                <th className="px-5 py-3 font-semibold text-right">Scope 1</th>
-                <th className="px-5 py-3 font-semibold text-right">Scope 2 LB</th>
-                <th className="px-5 py-3 font-semibold text-right">Scope 2 MB</th>
-                <th className="px-5 py-3 font-semibold text-right">Totale</th>
-                <th className="px-5 py-3 font-semibold">Azioni</th>
+              <tr style={{ background: "#1C2B28" }}>
+                {["Anno", "Codice", "Stato", "Scope 1", "Scope 2 LB", "Scope 2 MB", "Totale", "Azioni"].map((h, i) => (
+                  <th key={h} style={{ color: "#fff", fontSize: 12, fontWeight: 500, padding: "12px 16px", textAlign: i >= 3 && i <= 6 ? "right" : "left" }}>
+                    {h}
+                  </th>
+                ))}
               </tr>
             </thead>
             <tbody>
               {reports.map((r) => {
-                const s1 = r.scope1_total ?? 0;
-                const s2lb = r.scope2_lb_total ?? 0;
-                const s2mb = r.scope2_mb_total ?? 0;
-                const tot = r.total_co2eq ?? (Number(s1) + Number(s2lb));
-                const isComplete = r.status === "completato" || r.status === "completed";
+                const isComp = r.status === "completato" || r.status === "completed";
+                const s1 = fmtVal(r.scope1_total);
+                const s2lb = fmtVal(r.scope2_lb_total);
+                const s2mb = fmtVal(r.scope2_mb_total);
+                const tot = fmtVal(r.total_co2eq) || (Number(r.scope1_total ?? 0) + Number(r.scope2_lb_total ?? 0) > 0 ? (Number(r.scope1_total ?? 0) + Number(r.scope2_lb_total ?? 0)).toFixed(2) : null);
+
                 return (
-                  <tr key={r.id} className="border-t border-gray-100 hover:bg-gray-50">
-                    <td className="px-5 py-3 font-medium">{r.year}</td>
-                    <td className="px-5 py-3">
-                      <span className={`text-xs px-2 py-0.5 rounded-full ${
-                        isComplete ? "bg-[#006450]/10 text-[#006450]" : "bg-amber-100 text-amber-700"
-                      }`}>
-                        {isComplete ? "Completato" : "Bozza"}
+                  <tr key={r.id} className="hover:bg-[#F4F8F7] transition-colors" style={{ borderBottom: "0.5px solid #E2EAE8" }}>
+                    <td style={{ padding: "12px 16px", fontSize: 13, fontWeight: 600, color: "#1C2B28" }}>{r.year}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 12, color: "#8AB5AC", fontFamily: "var(--font-dm-mono), monospace" }}>{r.report_code || "—"}</td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: isComp ? "#E8F9EE" : "#FFF3DC", color: isComp ? "#1A8A47" : "#92600A" }}>
+                        {isComp ? "Completato" : "Bozza"}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-right">{Number(s1) > 0 ? Number(s1).toFixed(2) : "—"}</td>
-                    <td className="px-5 py-3 text-right">{Number(s2lb) > 0 ? Number(s2lb).toFixed(2) : "—"}</td>
-                    <td className="px-5 py-3 text-right text-blue-700">{Number(s2mb) > 0 ? Number(s2mb).toFixed(2) : "—"}</td>
-                    <td className="px-5 py-3 text-right font-semibold">{Number(tot) > 0 ? Number(tot).toFixed(2) : "—"}</td>
-                    <td className="px-5 py-3">
-                      <div className="flex gap-2">
-                        {isComplete ? (
-                          <>
-                            <Link href={`/clients/${companyId}/ghg/${r.id}/view`} className="text-[#006450] hover:underline text-sm">Apri</Link>
-                            <span className="text-gray-300 text-sm">PDF</span>
-                          </>
-                        ) : (
-                          <Link href={`/clients/${companyId}/ghg/new?report=${r.id}`} className="text-amber-600 hover:underline text-sm">Riprendi</Link>
-                        )}
-                      </div>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontSize: 13, fontFamily: "var(--font-dm-mono), monospace", color: s1 ? "#1C2B28" : "#8AB5AC" }}>{s1 || "—"}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontSize: 13, fontFamily: "var(--font-dm-mono), monospace", color: s2lb ? "#1C2B28" : "#8AB5AC" }}>{s2lb || "—"}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontSize: 13, fontFamily: "var(--font-dm-mono), monospace", color: s2mb ? "#1C2B28" : "#8AB5AC" }}>{s2mb || "—"}</td>
+                    <td style={{ padding: "12px 16px", textAlign: "right", fontSize: 13, fontWeight: 700, fontFamily: "var(--font-dm-mono), monospace", color: tot ? "#1A8A47" : "#8AB5AC" }}>{tot || "—"}</td>
+                    <td style={{ padding: "12px 16px" }}>
+                      {isComp ? (
+                        <div style={{ display: "flex", gap: 12 }}>
+                          <Link href={`/clients/${companyId}/ghg/${r.id}/view`} style={{ fontSize: 13, color: "#27AE60", fontWeight: 500, textDecoration: "none" }}>Apri</Link>
+                          <Link href={`/clients/${companyId}/ghg/${r.id}/edit`} style={{ fontSize: 13, color: "#5A9088", textDecoration: "none" }}>Modifica</Link>
+                        </div>
+                      ) : (
+                        <Link href={`/clients/${companyId}/ghg/${r.id}/edit`} style={{ fontSize: 13, color: "#27AE60", fontWeight: 500, textDecoration: "none" }}>Riprendi</Link>
+                      )}
                     </td>
                   </tr>
                 );

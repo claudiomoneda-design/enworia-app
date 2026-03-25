@@ -7,7 +7,7 @@ import { supabase } from "@/lib/supabase";
 import type { Company } from "@/types/database";
 import { EU_COUNTRIES, EMPLOYEE_UNITS } from "@/data/constants";
 
-const GHG_GREEN = "#006450";
+const GHG_GREEN = "#27AE60";
 
 interface GhgReportRow {
   id: string;
