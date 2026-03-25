@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react'
 import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
+import UploadBolletta from '@/components/ingestion/UploadBolletta'
 
 const MONTHS = ['', 'Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
 const STATUS_CFG = {
@@ -65,6 +66,15 @@ export default function PeriodsListPage() {
           >+ Nuovo periodo</a>
         </div>
       </div>
+
+      {/* Upload bolletta — uses most recent period */}
+      {periods.length > 0 && (
+        <UploadBolletta
+          companyId={clientId}
+          periodId={periods[0]?.id}
+          onApproved={() => window.location.reload()}
+        />
+      )}
 
       {periods.length === 0 && (
         <div style={{ padding: '40px 20px', textAlign: 'center', color: '#999', background: '#F4F8F7', borderRadius: 10 }}>
