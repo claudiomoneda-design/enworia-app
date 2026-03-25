@@ -137,7 +137,7 @@ export default function ClientDetailPage() {
       const [{ data: co }, { data: ghg }, { data: vsme }] = await Promise.all([
         supabase.from("companies").select("*").eq("id", id).single(),
         supabase.from("ghg_reports")
-          .select("id, reference_year, report_code, status, modalita, step_corrente, scope1_total, scope2_lb_total, scope2_mb_total, total_co2eq")
+          .select("*")
           .eq("company_id", id).order("reference_year", { ascending: false }),
         supabase.from("vsme_reports").select("id, anno, status").eq("client_id", id).order("anno", { ascending: false }),
       ]);
@@ -254,7 +254,6 @@ export default function ClientDetailPage() {
                   ? `Continua → ${GHG_STEPS.find(s => s.key === (latestGhg.step_corrente || "modalita"))?.label || ""}`
                   : "+ Nuovo calcolo GHG"}
               </button>
-              <Link href={`/clients/${id}/periods`} className="text-xs text-gray-400 hover:underline">Periodi mensili</Link>
               {ghgReports.length > 0 && (
                 <Link href={`/clients/${id}/ghg`} className="text-xs text-gray-400 hover:underline">Storico ({ghgReports.length})</Link>
               )}
