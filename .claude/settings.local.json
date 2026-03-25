@@ -51,7 +51,9 @@
       "Bash(npx supabase:*)",
       "Bash(for cat:*)",
       "Bash(do)",
-      "Bash(done)"
+      "Bash(done)",
+      "Bash(tr ';' '\\\\n')",
+      "Bash(cut -d';' -f1,2,4,6,9,15,19,27,34,47,48,51,52,53,55)"
     ]
   }
 }
