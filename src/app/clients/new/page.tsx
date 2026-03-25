@@ -108,8 +108,8 @@ export default function NewClientPage() {
               style={{ ...S.input, flex: 1 }}
               onFocus={e => { e.target.style.borderColor = '#27AE60'; e.target.style.boxShadow = '0 0 0 2px rgba(39,174,96,0.12)'; }}
               onBlur={e => { e.target.style.borderColor = '#E2EAE8'; e.target.style.boxShadow = 'none'; }} />
-            <button type="button" onClick={handleScrape} disabled={!form.website || scraping}
-              style={{ fontSize: 12, fontWeight: 700, padding: '0 14px', borderRadius: 6, border: '1.5px solid #27AE60', color: '#27AE60', background: '#fff', cursor: form.website && !scraping ? 'pointer' : 'default', whiteSpace: 'nowrap', opacity: form.website ? 1 : 0.4 }}>
+            <button type="button" onClick={handleScrape} disabled={form.website.trim().length < 3 || scraping}
+              style={{ fontSize: 12, fontWeight: 700, padding: '0 14px', borderRadius: 6, border: '1.5px solid #27AE60', color: '#27AE60', background: '#fff', cursor: form.website.trim().length >= 3 && !scraping ? 'pointer' : 'default', whiteSpace: 'nowrap', opacity: form.website.trim().length >= 3 ? 1 : 0.4 }}>
               {scraping ? 'Analisi...' : 'Compila con AI →'}
             </button>
           </div>
