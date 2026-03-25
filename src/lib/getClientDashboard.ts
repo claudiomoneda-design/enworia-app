@@ -15,6 +15,8 @@ export interface DashboardData {
   alerts: Alert[]
   ghg: { fonti_completate: number; fonti_totali: number; fonti_mancanti: string[] }
   hasDati: boolean
+  // Totale annuale da ghg_reports (fonte verità)
+  totaleAnnualeReport: number
 }
 
 export async function getClientDashboard(companyId: string): Promise<DashboardData> {
@@ -22,84 +24,104 @@ export async function getClientDashboard(companyId: string): Promise<DashboardDa
   const curYear = now.getFullYear()
   const curMonth = now.getMonth() + 1
 
-  // Load all periods + entries for this company
+  // ── 1. Fonte verità: ghg_reports ──
+  const { data: reports } = await supabase
+    .from('ghg_reports')
+    .select('reference_year, scope1_total, scope2_lb_total, total_co2eq, status')
+    .eq('company_id', companyId)
+    .order('reference_year', { ascending: false })
+
+  // Totale annuale dal report (fonte verità)
+  const latestReport = reports?.[0]
+  const totaleAnnuale = latestReport
+    ? Number(latestReport.total_co2eq ?? 0) || (Number(latestReport.scope1_total ?? 0) + Number(latestReport.scope2_lb_total ?? 0))
+    : 0
+
+  // Anno precedente
+  const prevYearReport = reports?.find(r => r.reference_year === curYear - 1)
+  const prevYearTotal = prevYearReport
+    ? Number(prevYearReport.total_co2eq ?? 0) || (Number(prevYearReport.scope1_total ?? 0) + Number(prevYearReport.scope2_lb_total ?? 0))
+    : 0
+
+  // ── 2. Dati mensili da energy_entries (solo per chart/KPI mensili) ──
   const { data: periods } = await supabase
     .from('ghg_periods')
     .select('id, year, month')
     .eq('company_id', companyId)
 
-  if (!periods || periods.length === 0) return emptyDashboard(curMonth, curYear)
+  // Check if there are actual monthly periods (month IS NOT NULL)
+  const monthlyPeriods = (periods || []).filter(p => p.month != null)
+  const hasMonthlyData = monthlyPeriods.length > 0
 
-  const periodIds = periods.map(p => p.id)
-  const { data: entries } = await supabase
-    .from('energy_entries')
-    .select('period_id, co2e_kg, scope, source_category')
-    .in('period_id', periodIds)
-
-  if (!entries || entries.length === 0) return emptyDashboard(curMonth, curYear)
-
-  // Build monthly aggregation
-  const periodMap: Record<string, { year: number; month: number | null }> = {}
-  periods.forEach(p => { periodMap[p.id] = { year: p.year, month: p.month } })
-
-  const monthlyMap: Record<string, number> = {} // "YYYY-MM" → kgCO2e
+  let monthlyMap: Record<string, number> = {}
   const sourceCategories = new Set<string>()
 
-  entries.forEach(e => {
-    const p = periodMap[e.period_id]
-    if (!p) return
-    sourceCategories.add(e.source_category)
-    if (p.month) {
-      const key = `${p.year}-${String(p.month).padStart(2, '0')}`
-      monthlyMap[key] = (monthlyMap[key] || 0) + (e.co2e_kg || 0)
-    } else {
-      // Annual data — distribute evenly across 12 months for display
-      for (let m = 1; m <= 12; m++) {
-        const key = `${p.year}-${String(m).padStart(2, '0')}`
-        monthlyMap[key] = (monthlyMap[key] || 0) + (e.co2e_kg || 0) / 12
-      }
-    }
-  })
+  if (hasMonthlyData) {
+    const periodIds = monthlyPeriods.map(p => p.id)
+    const { data: entries } = await supabase
+      .from('energy_entries')
+      .select('period_id, co2e_kg, scope, source_category, approach')
+      .in('period_id', periodIds)
 
-  // Build sorted monthly array (last 24 months)
-  const allMonths: MeseData[] = []
-  for (let i = 23; i >= 0; i--) {
+    if (entries) {
+      const periodMap: Record<string, { year: number; month: number }> = {}
+      monthlyPeriods.forEach(p => { periodMap[p.id] = { year: p.year, month: p.month! } })
+
+      entries.forEach(e => {
+        const p = periodMap[e.period_id]
+        if (!p) return
+        // Exclude market-based to avoid double counting
+        if (e.approach === 'market') return
+        sourceCategories.add(e.source_category)
+        const key = `${p.year}-${String(p.month).padStart(2, '0')}`
+        monthlyMap[key] = (monthlyMap[key] || 0) + (e.co2e_kg || 0)
+      })
+    }
+  }
+
+  // Also check annual entries for fonti_completate
+  if (!hasMonthlyData && periods && periods.length > 0) {
+    const allPeriodIds = periods.map(p => p.id)
+    const { data: entries } = await supabase
+      .from('energy_entries')
+      .select('source_category')
+      .in('period_id', allPeriodIds)
+    if (entries) entries.forEach(e => sourceCategories.add(e.source_category))
+  }
+
+  // ── 3. Build monthly array (only if monthly data exists) ──
+  const last12: (MeseData & { label: string })[] = []
+  for (let i = 11; i >= 0; i--) {
     const d = new Date(curYear, curMonth - 1 - i, 1)
     const y = d.getFullYear(), m = d.getMonth() + 1
     const key = `${y}-${String(m).padStart(2, '0')}`
-    allMonths.push({ mese: m, anno: y, tCO2e: (monthlyMap[key] || 0) / 1000 })
+    const val = hasMonthlyData ? (monthlyMap[key] || 0) / 1000 : 0
+    last12.push({ mese: m, anno: y, tCO2e: val, label: MESI_SHORT[m] })
   }
 
-  // Last 12 for chart
-  const last12 = allMonths.slice(-12)
-
-  // Current & previous month
   const cur = last12[last12.length - 1]
   const prev = last12[last12.length - 2]
   const prevPrev = last12.length >= 3 ? last12[last12.length - 3] : null
 
-  // Media ultimi 6 mesi (escludendo mese corrente)
-  const last6 = last12.slice(-7, -1)
-  const media6m = last6.reduce((s, m) => s + m.tCO2e, 0) / (last6.filter(m => m.tCO2e > 0).length || 1)
+  // Media ultimi 6 mesi
+  const last6 = last12.slice(-7, -1).filter(m => m.tCO2e > 0)
+  const media6m = last6.length > 0 ? last6.reduce((s, m) => s + m.tCO2e, 0) / last6.length : 0
 
-  // Variazioni %
   const pct = (a: number, b: number) => b > 0 ? Math.round(((a - b) / b) * 100) : null
 
-  // YTD
-  const ytdMonths = last12.filter(m => m.anno === curYear)
-  const ytdTotal = ytdMonths.reduce((s, m) => s + m.tCO2e, 0)
-  const ytdMonthsPrev = allMonths.filter(m => m.anno === curYear - 1 && m.mese <= curMonth)
-  const ytdTotalPrev = ytdMonthsPrev.reduce((s, m) => s + m.tCO2e, 0)
-  const monthsElapsed = ytdMonths.filter(m => m.tCO2e > 0).length || curMonth
-  const proiezione = ytdTotal > 0 ? (ytdTotal / monthsElapsed) * 12 : null
+  // YTD from monthly data
+  const ytdFromMonthly = hasMonthlyData
+    ? last12.filter(m => m.anno === curYear).reduce((s, m) => s + m.tCO2e, 0)
+    : 0
+  // Use report total if no monthly data
+  const ytdTotal = ytdFromMonthly > 0 ? ytdFromMonthly : (latestReport?.reference_year === curYear ? totaleAnnuale : 0)
 
-  // Anno precedente
-  const prevYearMonths = allMonths.filter(m => m.anno === curYear - 1)
-  const prevYearTotal = prevYearMonths.reduce((s, m) => s + m.tCO2e, 0)
+  const monthsElapsed = hasMonthlyData ? last12.filter(m => m.anno === curYear && m.tCO2e > 0).length : 12
+  const proiezione = ytdTotal > 0 && monthsElapsed < 12 ? (ytdTotal / monthsElapsed) * 12 : null
 
-  // Alerts
+  // ── 4. Alerts (only if monthly data) ──
   const alerts: Alert[] = []
-  if (cur.tCO2e > 0 && prev.tCO2e > 0) {
+  if (hasMonthlyData && cur.tCO2e > 0 && prev.tCO2e > 0) {
     const varPct = ((cur.tCO2e - prev.tCO2e) / prev.tCO2e) * 100
     if (varPct > 15) {
       alerts.push({
@@ -111,42 +133,41 @@ export async function getClientDashboard(companyId: string): Promise<DashboardDa
     }
   }
 
-  // GHG completamento
+  // ── 5. GHG completamento fonti ──
   const allFonti = ['gas_naturale', 'gasolio', 'benzina', 'gpl', 'elettricita', 'calore']
-  const fontiPresenti = new Set<string>()
-  entries.forEach(e => fontiPresenti.add(e.source_category))
-  const fontiMancanti = allFonti.filter(f => !fontiPresenti.has(f))
+  const fontiMancanti = allFonti.filter(f => !sourceCategories.has(f))
 
   return {
     meseCorrente: {
       ...cur,
-      vs_mese_prec_pct: pct(cur.tCO2e, prev.tCO2e),
-      vs_media6m_delta: Math.round((cur.tCO2e - media6m) * 1000) / 1000,
+      vs_mese_prec_pct: hasMonthlyData && cur.tCO2e > 0 && prev.tCO2e > 0 ? pct(cur.tCO2e, prev.tCO2e) : null,
+      vs_media6m_delta: hasMonthlyData && media6m > 0 ? Math.round((cur.tCO2e - media6m) * 1000) / 1000 : null,
       label: `${MESI_IT[cur.mese]} ${cur.anno}`,
     },
     mesePrecedente: {
       ...prev,
-      vs_mese_prec_pct: prevPrev ? pct(prev.tCO2e, prevPrev.tCO2e) : null,
+      vs_mese_prec_pct: hasMonthlyData && prev.tCO2e > 0 && prevPrev?.tCO2e ? pct(prev.tCO2e, prevPrev.tCO2e) : null,
       label: `${MESI_IT[prev.mese]} ${prev.anno}`,
     },
     ytd: {
       tCO2e: Math.round(ytdTotal * 1000) / 1000,
-      vs_ytd_anno_prec_pct: pct(ytdTotal, ytdTotalPrev),
+      vs_ytd_anno_prec_pct: prevYearTotal > 0 ? pct(ytdTotal, prevYearTotal) : null,
       proiezione_annua: proiezione ? Math.round(proiezione * 1000) / 1000 : null,
     },
     annoPrecedente: {
       anno: curYear - 1,
       tCO2e: Math.round(prevYearTotal * 1000) / 1000,
-      vs_anno_prima_pct: null, // would need year-2 data
+      vs_anno_prima_pct: null,
     },
-    mensili: last12.map(m => ({ ...m, label: MESI_SHORT[m.mese] })),
+    mensili: hasMonthlyData ? last12 : [],
     alerts,
     ghg: {
-      fonti_completate: fontiPresenti.size,
+      fonti_completate: sourceCategories.size,
       fonti_totali: allFonti.length,
       fonti_mancanti: fontiMancanti,
     },
-    hasDati: Object.keys(monthlyMap).length > 0,
+    hasDati: totaleAnnuale > 0 || hasMonthlyData,
+    totaleAnnualeReport: totaleAnnuale,
   }
 }
 
@@ -160,5 +181,6 @@ function emptyDashboard(curMonth: number, curYear: number): DashboardData {
     alerts: [],
     ghg: { fonti_completate: 0, fonti_totali: 6, fonti_mancanti: ['gas_naturale', 'gasolio', 'benzina', 'gpl', 'elettricita', 'calore'] },
     hasDati: false,
+    totaleAnnualeReport: 0,
   }
 }

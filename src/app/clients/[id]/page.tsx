@@ -161,29 +161,33 @@ export default function ClientDetailPage() {
       {/* ═══ KPI GRID or ONBOARDING ═══ */}
       {d.hasDati ? (
         <div style={{ display: "flex", gap: 12, marginBottom: 24 }}>
+          {/* Card 1 — Mese corrente (only if monthly data) */}
           <KpiCard
-            label={d.meseCorrente.label}
-            value={d.meseCorrente.tCO2e > 0 ? d.meseCorrente.tCO2e.toFixed(2) : "—"}
+            label={d.mensili.length > 0 ? d.meseCorrente.label : `Totale ${annoLabel}`}
+            value={d.mensili.length > 0 && d.meseCorrente.tCO2e > 0 ? d.meseCorrente.tCO2e.toFixed(2) : d.mensili.length === 0 ? d.totaleAnnualeReport.toFixed(2) : "—"}
             unit="t CO₂e"
             badge={d.meseCorrente.vs_mese_prec_pct != null ? { text: `${Math.abs(d.meseCorrente.vs_mese_prec_pct)}%`, up: d.meseCorrente.vs_mese_prec_pct > 0 } : null}
             delta={d.meseCorrente.vs_media6m_delta != null && d.meseCorrente.vs_media6m_delta > 0
               ? `↑ +${d.meseCorrente.vs_media6m_delta.toFixed(2)} t vs media 6 mesi`
-              : d.meseCorrente.tCO2e > 0 ? "↓ in linea con media storica" : undefined}
+              : d.mensili.length > 0 && d.meseCorrente.tCO2e > 0 ? "↓ in linea con media storica" : d.mensili.length === 0 ? "Dato annuale da report GHG" : undefined}
             alertBorder={d.alerts.length > 0}
           />
+          {/* Card 2 — Mese precedente */}
           <KpiCard
-            label={d.mesePrecedente.label}
-            value={d.mesePrecedente.tCO2e > 0 ? d.mesePrecedente.tCO2e.toFixed(2) : "—"}
+            label={d.mensili.length > 0 ? d.mesePrecedente.label : "Mese precedente"}
+            value={d.mensili.length > 0 && d.mesePrecedente.tCO2e > 0 ? d.mesePrecedente.tCO2e.toFixed(2) : "—"}
             unit="t CO₂e"
             badge={d.mesePrecedente.vs_mese_prec_pct != null ? { text: `${Math.abs(d.mesePrecedente.vs_mese_prec_pct)}%`, up: d.mesePrecedente.vs_mese_prec_pct > 0 } : null}
           />
+          {/* Card 3 — YTD */}
           <KpiCard
             label={`YTD ${annoLabel}`}
-            value={d.ytd.tCO2e > 0 ? d.ytd.tCO2e.toFixed(2) : "—"}
+            value={d.ytd.tCO2e > 0 ? d.ytd.tCO2e.toFixed(2) : d.totaleAnnualeReport > 0 ? d.totaleAnnualeReport.toFixed(2) : "—"}
             unit="t CO₂e"
             badge={d.ytd.vs_ytd_anno_prec_pct != null ? { text: `${Math.abs(d.ytd.vs_ytd_anno_prec_pct)}%`, up: d.ytd.vs_ytd_anno_prec_pct > 0 } : null}
-            delta={d.ytd.proiezione_annua ? `↑ proiezione annua: ~${d.ytd.proiezione_annua.toFixed(1)} t` : undefined}
+            delta={d.ytd.proiezione_annua ? `↑ proiezione annua: ~${d.ytd.proiezione_annua.toFixed(1)} t` : d.mensili.length === 0 ? "Dato annuale (no dati mensili)" : undefined}
           />
+          {/* Card 4 — Anno precedente (dark) */}
           <div style={{ flex: 1, minWidth: 0 }}>
             <KpiCard
               label={`Totale ${d.annoPrecedente.anno}`}
@@ -191,9 +195,11 @@ export default function ClientDetailPage() {
               unit="t CO₂e"
               dark
             />
-            <div style={{ background: "#1C2B28", borderRadius: "0 0 12px 12px", padding: "0 20px 12px", marginTop: -12 }}>
-              <MiniChart data={d.mensili} />
-            </div>
+            {d.mensili.length > 0 && (
+              <div style={{ background: "#1C2B28", borderRadius: "0 0 12px 12px", padding: "0 20px 12px", marginTop: -12 }}>
+                <MiniChart data={d.mensili} />
+              </div>
+            )}
           </div>
         </div>
       ) : (
