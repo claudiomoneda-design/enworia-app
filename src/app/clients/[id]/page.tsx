@@ -222,6 +222,13 @@ export default function ClientDetailPage() {
           >
             + Nuovo calcolo GHG
           </button>
+          <Link
+            href={`/clients/${id}/periods`}
+            className="text-center px-3 py-1.5 rounded-md text-xs font-medium transition-colors block w-full mt-2"
+            style={{ border: '1px solid #1C2B28', color: '#1C2B28' }}
+          >
+            Periodi mensili →
+          </Link>
           {ghgReports.length > 0 && (
             <Link
               href={`/clients/${id}/ghg`}

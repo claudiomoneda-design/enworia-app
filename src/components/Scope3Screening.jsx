@@ -444,7 +444,7 @@ function SubcategoryRow({ sub, screening, onUpdate, exclusionReasons }) {
 // ------------------------------------------------------------------
 // Componente principale
 // ------------------------------------------------------------------
-export default function Scope3Screening({ reportId, companyId: companyIdProp }) {
+export default function Scope3Screening({ reportId, companyId: companyIdProp, onProceedToData }) {
   const [subcategories, setSubcategories] = useState([])
   const [screeningMap, setScreeningMap] = useState({})
   const [exclusionReasons, setExclusionReasons] = useState(FALLBACK_REASONS)
@@ -590,6 +590,21 @@ export default function Scope3Screening({ reportId, companyId: companyIdProp }) 
           <span style={{ fontSize: 13, color: '#15803d', fontWeight: 500 }}>
             Screening completato — {stats.significant || 0} categorie da quantificare
           </span>
+        </div>
+      )}
+
+      {/* Procedi ai dati — visibile se almeno 1 significant o to_verify */}
+      {(stats.significant > 0 || stats.to_verify > 0) && onProceedToData && (
+        <div style={{ textAlign: 'right', marginTop: 16 }}>
+          <button
+            onClick={onProceedToData}
+            style={{
+              fontSize: 14, fontWeight: 600, padding: '10px 24px', borderRadius: 8,
+              border: 'none', cursor: 'pointer', background: '#27AE60', color: '#fff',
+            }}
+          >
+            Procedi con inserimento dati →
+          </button>
         </div>
       )}
     </div>
