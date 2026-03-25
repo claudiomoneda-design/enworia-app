@@ -41,9 +41,21 @@ export async function POST(req) {
   "consumo_kwh": numero o null,
   "consumo_m3": numero o null,
   "importo_eur": numero o null,
-  "pod_pdr": "codice" o null
+  "pod_pdr": "codice" o null,
+  "num_fattura": "numero" o null,
+  "righe": [{ "mese": N, "anno": NNNN, "consumo": numero o null, "unita": "kWh" o "m3" }]
 }
-Se non riesci a leggere un campo, metti null.`,
+Se non riesci a leggere un campo, metti null.
+
+Se nel documento trovi un grafico a barre o una tabella con lo storico consumi mensili (tipicamente gli ultimi 12 mesi), estrailo completamente nell'array "righe".
+
+Regole per i grafici a barre:
+- Se i valori numerici sono scritti sopra le barre o in una tabella accanto al grafico: estraili normalmente con confidence alta
+- Se i valori sono solo visivi (altezza delle barre senza numeri): NON stimare — inserisci null come consumo e aggiungi il campo "valori_stimati_da_grafico": true nel JSON
+- I mesi sull'asse X del grafico sono il riferimento per mese/anno
+- L'anno di riferimento di solito è indicato nel titolo del grafico o si deduce dall'ultimo mese che coincide con il periodo di fatturazione
+
+Analizza TUTTE le pagine del documento, non solo la prima.`,
             },
           ],
         }],

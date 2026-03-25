@@ -1,8 +1,7 @@
 'use client'
 import { useState, useEffect } from 'react'
-import { useParams, useRouter } from 'next/navigation'
+import { useParams } from 'next/navigation'
 import { supabase } from '@/lib/supabase'
-import UploadBolletta from '@/components/ingestion/UploadBolletta'
 
 const MONTHS = ['', 'Gen', 'Feb', 'Mar', 'Apr', 'Mag', 'Giu', 'Lug', 'Ago', 'Set', 'Ott', 'Nov', 'Dic']
 const STATUS_CFG = {
@@ -14,7 +13,6 @@ const STATUS_CFG = {
 
 export default function PeriodsListPage() {
   const { id: clientId } = useParams()
-  const router = useRouter()
   const [periods, setPeriods] = useState([])
   const [summaries, setSummaries] = useState({})
   const [loading, setLoading] = useState(true)
@@ -58,14 +56,6 @@ export default function PeriodsListPage() {
         </div>
         <a href={`/clients/${clientId}`} style={{ fontSize: 13, color: '#2563eb', textDecoration: 'none' }}>← Cliente</a>
       </div>
-
-      {/* Upload bolletta — always visible, prominent */}
-      <UploadBolletta
-        companyId={clientId}
-        onApproved={() => window.location.reload()}
-        showManualLink
-        onManualFallback={() => router.push(`/clients/${clientId}/periods/new`)}
-      />
 
       {/* Period list */}
       {periods.length === 0 ? (

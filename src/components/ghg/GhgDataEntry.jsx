@@ -1,6 +1,7 @@
 'use client'
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { supabase } from '@/lib/supabase'
+import UploadBolletta from '@/components/ingestion/UploadBolletta'
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 const YEARS = [2026, 2025, 2024, 2023, 2022, 2021, 2020]
@@ -429,6 +430,25 @@ export default function GhgDataEntry({ companyId, editPeriodId }) {
       {/* ── Step 2: Scope 1 ── */}
       {step === 2 && (
         <div>
+          {/* Upload bolletta — above manual form */}
+          <UploadBolletta
+            companyId={companyId}
+            periodId={periodId}
+            onApproved={() => window.location.reload()}
+          />
+
+          {/* Separator */}
+          <div style={{ position: 'relative', margin: '20px 0' }}>
+            <div style={{ position: 'absolute', inset: 0, display: 'flex', alignItems: 'center' }}>
+              <div style={{ width: '100%', borderTop: '1px solid #E2EAE8' }} />
+            </div>
+            <div style={{ position: 'relative', display: 'flex', justifyContent: 'center' }}>
+              <span style={{ padding: '0 12px', background: '#fff', fontSize: 12, color: '#999' }}>
+                oppure inserisci manualmente
+              </span>
+            </div>
+          </div>
+
           <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 12 }}>
             <div>
               <h2 style={{ fontSize: 15, fontWeight: 600, color: '#1C2B28', margin: 0 }}>Scope 1 — Emissioni dirette</h2>
