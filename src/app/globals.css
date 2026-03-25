@@ -10,15 +10,26 @@
   --border: #E2EAE8;
   --muted: #636e72;
 
-  --enworia-accent: #27AE60;
-  --enworia-dark: #1C2B28;
-  --enworia-surface: #2A3D39;
-  --enworia-warning: #E8A020;
-  --enworia-text-muted: #A8C5BE;
+  /* Enworia brand */
+  --ew-dark:         #1C2B28;
+  --ew-dark-surface: #2A3D39;
+  --ew-dark-hover:   #3A5249;
+  --ew-accent:       #27AE60;
+  --ew-accent-dark:  #1A8A47;
+  --ew-accent-light: #E8F9EE;
+  --ew-accent-muted: #6FCF97;
+  --ew-pipeline:     #4A6A5E;
+  --ew-pipeline-l:   #5A9088;
+  --ew-pipeline-ll:  #8AB5AC;
+  --ew-light-bg:     #F4F8F7;
+  --ew-light-border: #E2EAE8;
+  --ew-warning:      #C8860A;
+  --ew-danger:       #C0392B;
+  --ew-text-muted:   #A8C5BE;
 }
 
 body {
   color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  background: var(--ew-light-bg);
+  font-family: 'DM Sans', system-ui, -apple-system, sans-serif;
 }

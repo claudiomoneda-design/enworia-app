@@ -5,6 +5,10 @@ import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase";
 import type { Company } from "@/types/database";
 
+function initials(name: string) {
+  return name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase() || "").join("");
+}
+
 export default function ClientsPage() {
   const [companies, setCompanies] = useState<Company[]>([]);
   const [loading, setLoading] = useState(true);
@@ -15,7 +19,6 @@ export default function ClientsPage() {
         .from("companies")
         .select("*")
         .order("created_at", { ascending: false });
-
       if (!error && data) setCompanies(data as Company[]);
       setLoading(false);
     })();
@@ -30,75 +33,79 @@ export default function ClientsPage() {
   return (
     <div>
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold text-[var(--primary)]">Clienti</h1>
+        <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.4, color: "#1C2B28" }}>Clienti</h1>
         <Link
           href="/clients/new"
-          className="bg-[#27AE60] text-white px-4 py-2 rounded-md text-sm font-medium hover:bg-[#1A8A47] transition-colors"
+          style={{ background: "#27AE60", color: "#fff", padding: "8px 20px", borderRadius: 8, fontSize: 14, fontWeight: 600, textDecoration: "none", transition: "background 0.15s" }}
         >
           + Nuovo cliente
         </Link>
       </div>
 
       {loading ? (
-        <p className="text-[var(--muted)] text-sm">Caricamento...</p>
+        <p style={{ color: "#8AB5AC", fontSize: 14 }}>Caricamento...</p>
       ) : companies.length === 0 ? (
-        <div className="text-center py-16 text-[var(--muted)]">
-          <p className="mb-2">Nessun cliente presente.</p>
-          <Link href="/clients/new" className="text-[#1E5C3A] text-sm hover:underline">
-            Aggiungi il primo cliente
+        <div style={{ textAlign: "center", padding: "64px 16px", color: "#5A9088" }}>
+          <p style={{ marginBottom: 8 }}>Nessun cliente presente.</p>
+          <Link href="/clients/new" style={{ color: "#27AE60", fontSize: 14, fontWeight: 500 }}>
+            Aggiungi il primo cliente →
           </Link>
         </div>
       ) : (
-        <div className="bg-white rounded-lg border border-[var(--border)] overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-[var(--border)] bg-gray-50 text-left text-[var(--muted)]">
-                <th className="px-4 py-3 font-medium">Azienda</th>
-                <th className="px-4 py-3 font-medium">ATECO</th>
-                <th className="px-4 py-3 font-medium text-right">Dipendenti</th>
-                <th className="px-4 py-3 font-medium text-center">Stato</th>
-                <th className="px-4 py-3 font-medium text-right">Azioni</th>
-              </tr>
-            </thead>
-            <tbody>
-              {companies.map((company) => (
-                <tr
-                  key={company.id}
-                  className="border-b border-[var(--border)] last:border-0 hover:bg-gray-50 transition-colors"
+        <div style={{ display: "grid", gap: 10 }}>
+          {companies.map((company) => (
+            <Link
+              key={company.id}
+              href={`/clients/${company.id}`}
+              style={{
+                display: "flex", alignItems: "center", gap: 14, padding: "16px 20px",
+                background: "#fff", border: "0.5px solid #E2EAE8", borderRadius: 12,
+                textDecoration: "none", transition: "border-color 0.15s, box-shadow 0.15s",
+              }}
+              className="hover:border-[#27AE60] hover:shadow-sm transition-all"
+            >
+              {/* Avatar */}
+              <div style={{
+                width: 40, height: 40, borderRadius: "50%",
+                background: "#2A3D39", display: "flex", alignItems: "center", justifyContent: "center",
+                fontSize: 14, fontWeight: 600, color: "#6FCF97", flexShrink: 0,
+              }}>
+                {initials(company.company_name || "??")}
+              </div>
+
+              {/* Info */}
+              <div style={{ flex: 1 }}>
+                <div style={{ fontSize: 14, fontWeight: 600, color: "#1C2B28" }}>
+                  {company.company_name || "Bozza senza nome"}
+                </div>
+                <div style={{ fontSize: 12, color: "#5A9088", marginTop: 2 }}>
+                  {company.nace_code ? `ATECO ${company.nace_code}` : ""}{company.nace_code && company.number_of_employees != null ? " · " : ""}{company.number_of_employees != null ? `${company.number_of_employees} dip.` : ""}
+                </div>
+              </div>
+
+              {/* Status badge */}
+              <span style={{
+                fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4,
+                background: company.form_status === "completed" ? "#E8F9EE" : "#FFF3DC",
+                color: company.form_status === "completed" ? "#1A8A47" : "#92600A",
+              }}>
+                {company.form_status === "completed" ? "Completato" : "Bozza"}
+              </span>
+
+              {/* Actions */}
+              <div style={{ display: "flex", gap: 12 }} onClick={(e) => e.preventDefault()}>
+                <Link href={`/clients/${company.id}/edit`} style={{ fontSize: 12, color: "#27AE60", fontWeight: 500 }}>
+                  Modifica
+                </Link>
+                <button
+                  onClick={() => handleDelete(company.id)}
+                  style={{ fontSize: 12, color: "#C0392B", fontWeight: 500, background: "none", border: "none", cursor: "pointer" }}
                 >
-                  <td className="px-4 py-3">
-                    <Link href={`/clients/${company.id}`} className="font-medium text-[var(--foreground)] hover:text-[#1E5C3A] transition-colors">
-                      {company.company_name || "Bozza senza nome"}
-                    </Link>
-                  </td>
-                  <td className="px-4 py-3 text-[var(--muted)]">{company.nace_code || "—"}</td>
-                  <td className="px-4 py-3 text-right text-[var(--muted)]">
-                    {company.number_of_employees != null ? company.number_of_employees.toLocaleString("it-IT") : "—"}
-                  </td>
-                  <td className="px-4 py-3 text-center">
-                    <span className={`inline-block px-2 py-0.5 rounded-full text-xs font-medium ${
-                      company.form_status === "completed"
-                        ? "bg-green-100 text-green-700"
-                        : "bg-amber-100 text-amber-700"
-                    }`}>
-                      {company.form_status === "completed" ? "Completato" : "Bozza"}
-                    </span>
-                  </td>
-                  <td className="px-4 py-3 text-right space-x-3">
-                    <Link href={`/clients/${company.id}/edit`} className="text-[#1E5C3A] hover:underline text-xs">
-                      Modifica
-                    </Link>
-                    <button
-                      onClick={() => handleDelete(company.id)}
-                      className="text-red-500 hover:text-red-700 text-xs transition-colors"
-                    >
-                      Elimina
-                    </button>
-                  </td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+                  Elimina
+                </button>
+              </div>
+            </Link>
+          ))}
         </div>
       )}
     </div>

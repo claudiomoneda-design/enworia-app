@@ -70,19 +70,19 @@ function MiniStepper({ steps, currentKey }: { steps: { key: string; label: strin
                 className="flex items-center justify-center rounded-full text-[9px] font-bold"
                 style={{
                   width: 20, height: 20,
-                  background: done ? "#3B6D11" : active ? "#185FA5" : "transparent",
-                  border: done || active ? "none" : "1.5px solid #ccc",
-                  color: done ? "#fff" : active ? "#fff" : "#999",
+                  background: done ? "#E8F9EE" : active ? "#27AE60" : "transparent",
+                  border: done ? "none" : active ? "none" : "1.5px solid #8AB5AC",
+                  color: done ? "#1A8A47" : active ? "#fff" : "#8AB5AC",
                 }}
               >
                 {done ? "✓" : i + 1}
               </div>
-              <span style={{ fontSize: 10, marginTop: 2, color: active ? "#1C2B28" : "#999", fontWeight: active ? 600 : 400 }}>
+              <span style={{ fontSize: 10, marginTop: 2, color: done ? "#1A8A47" : active ? "#27AE60" : "#8AB5AC", fontWeight: active ? 500 : 400 }}>
                 {s.label}
               </span>
             </div>
             {i < steps.length - 1 && (
-              <div style={{ width: 16, height: 2, background: done ? "#3B6D11" : "#E2EAE8", marginBottom: 14 }} />
+              <div style={{ width: 16, height: 1, background: done ? "#27AE60" : "#E2EAE8", marginBottom: 14 }} />
             )}
           </div>
         );
@@ -93,12 +93,15 @@ function MiniStepper({ steps, currentKey }: { steps: { key: string; label: strin
 
 function LockBanner({ text, scrollTo }: { text: string; scrollTo?: string }) {
   return (
-    <div className="flex items-center gap-2 mt-3 px-3 py-2.5 rounded-md" style={{ background: "#FFF8F0", border: "1px solid #F5E6D0" }}>
-      <span style={{ color: "#854F0B", fontSize: 14 }}>🔒</span>
-      <span style={{ fontSize: 12, color: "#633806", flex: 1 }}>{text}</span>
+    <div className="flex items-center gap-3 mt-3 rounded-lg" style={{ background: "#F0F7F5", border: "0.5px solid #C5DDD8", padding: "12px 16px" }}>
+      <svg width="14" height="14" viewBox="0 0 14 14" fill="none" style={{ flexShrink: 0 }}>
+        <rect x="2" y="6" width="10" height="7" rx="1.5" stroke="#4A6A5E" strokeWidth="1.2"/>
+        <path d="M4.5 6V4.5a2.5 2.5 0 015 0V6" stroke="#4A6A5E" strokeWidth="1.2"/>
+      </svg>
+      <span style={{ fontSize: 13, color: "#4A6A5E", flex: 1 }}>{text}</span>
       {scrollTo && (
-        <a href={scrollTo} style={{ fontSize: 11, color: "#854F0B", fontWeight: 500, whiteSpace: "nowrap", textDecoration: "none" }}>
-          Completa GHG →
+        <a href={scrollTo} style={{ fontSize: 12, color: "#27AE60", fontWeight: 500, whiteSpace: "nowrap", textDecoration: "none" }}>
+          Vai a GHG →
         </a>
       )}
     </div>
@@ -107,9 +110,9 @@ function LockBanner({ text, scrollTo }: { text: string; scrollTo?: string }) {
 
 function Metric({ label, value, color, highlight }: { label: string; value: string; color: string; highlight?: boolean }) {
   return (
-    <div className="text-center" style={highlight ? { background: "#EAF3DE", borderRadius: 6, padding: "4px 12px" } : undefined}>
-      <div style={{ fontSize: 10, color: "#999", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>{label}</div>
-      <div style={{ fontSize: 14, fontWeight: 700, color }}>{value}</div>
+    <div className="text-center" style={highlight ? { background: "#E8F9EE", border: "1px solid #6FCF97", borderRadius: 8, padding: "4px 14px" } : { background: "#F0F7F5", borderRadius: 8, padding: "4px 14px" }}>
+      <div style={{ fontSize: 10, color: "#8AB5AC", textTransform: "uppercase" as const, letterSpacing: 0.5 }}>{label}</div>
+      <div style={{ fontSize: 14, fontWeight: 700, color: highlight ? "#1A8A47" : color }}>{value}</div>
     </div>
   );
 }
@@ -183,19 +186,28 @@ export default function ClientDetailPage() {
     <div className="space-y-5 max-w-4xl mx-auto" style={{ fontFamily: "Arial, sans-serif" }}>
 
       {/* ═══ 1. HEADER ═══ */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-[#1C2B28]">{c.company_name || "Bozza senza nome"}</h1>
-          <div className="flex items-center gap-3 mt-1">
-            {c.nace_code && <span className="text-xs text-gray-400">ATECO {c.nace_code}</span>}
-            {c.number_of_employees != null && <span className="text-xs text-gray-400">{c.number_of_employees} dip.</span>}
-            <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${c.form_status === "draft" ? "bg-amber-100 text-amber-700" : "bg-green-100 text-green-700"}`}>
-              {c.form_status === "draft" ? "Bozza" : "Attivo"}
-            </span>
-            <Link href={`/clients/${id}/edit`} className="text-xs text-blue-600 hover:underline">Modifica dati</Link>
+      <div style={{ padding: "28px 0 24px" }}>
+        <div className="flex justify-between items-start">
+          <div>
+            <h1 style={{ fontSize: 22, fontWeight: 700, letterSpacing: -0.4, color: "#1C2B28", margin: 0 }}>
+              {c.company_name || "Bozza senza nome"}
+            </h1>
+            <div className="flex items-center gap-2.5" style={{ marginTop: 6 }}>
+              <span style={{ fontSize: 13, color: "#5A9088" }}>
+                {c.nace_code ? `ATECO ${c.nace_code}` : ""}{c.nace_code && c.number_of_employees != null ? " · " : ""}{c.number_of_employees != null ? `${c.number_of_employees} dip.` : ""}
+              </span>
+              <span style={{ background: isComplete(c.form_status || "") ? "#E8F9EE" : "#FFF3DC", color: isComplete(c.form_status || "") ? "#1A8A47" : "#92600A", fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4 }}>
+                {isComplete(c.form_status || "") ? "Completato" : "Bozza"}
+              </span>
+              <Link href={`/clients/${id}/edit`} style={{ fontSize: 13, color: "#27AE60", textDecoration: "none", fontWeight: 500 }}>
+                Modifica dati
+              </Link>
+            </div>
           </div>
+          <Link href="/clients" style={{ fontSize: 13, color: "#5A9088", textDecoration: "none", marginTop: 4 }}>
+            ← Tutti i clienti
+          </Link>
         </div>
-        <Link href="/clients" className="text-xs text-gray-400 hover:underline">← Tutti i clienti</Link>
       </div>
 
       {/* ═══ 2. COMPANY DATA (collapsible) ═══ */}
@@ -224,14 +236,14 @@ export default function ClientDetailPage() {
       {/* ═══ 3. QUATTRO MODULI IN SEQUENZA ═══ */}
 
       {/* ── MODULO 1: GHG Scope 1+2 ── */}
-      <div id="modulo-ghg" className="bg-white rounded-lg border border-gray-200 p-5" style={{ borderLeft: `3px solid ${hasCompletedGhg ? "#3B6D11" : "#185FA5"}` }}>
+      <div id="modulo-ghg" className="bg-white p-5" style={{ borderLeft: "3px solid #27AE60", borderRadius: 12, border: "0.5px solid #E2EAE8", borderLeftWidth: 3, borderLeftColor: "#27AE60", boxShadow: "0 1px 3px rgba(28,43,40,0.08)" }}>
         <div className="flex items-start gap-4">
-          <div className="flex items-center justify-center rounded-full text-xs font-bold text-white" style={{ width: 28, height: 28, background: hasCompletedGhg ? "#3B6D11" : "#185FA5", flexShrink: 0 }}>{hasCompletedGhg ? "✓" : "1"}</div>
+          <div className="flex items-center justify-center rounded-full text-xs font-bold text-white" style={{ width: 28, height: 28, background: "#27AE60", flexShrink: 0 }}>{hasCompletedGhg ? "✓" : "1"}</div>
           <div className="flex-1">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-[#1C2B28]">Calcolo GHG Scope 1+2</h3>
               {latestGhg && (
-                <span className={`text-[10px] px-2 py-0.5 rounded-full font-medium ${isComplete(latestGhg.status) ? "bg-green-100 text-green-700" : "bg-amber-100 text-amber-700"}`}>
+                <span style={{ fontSize: 11, fontWeight: 600, padding: "2px 8px", borderRadius: 4, background: isComplete(latestGhg.status) ? "#E8F9EE" : "#FFF3DC", color: isComplete(latestGhg.status) ? "#1A8A47" : "#92600A" }}>
                   {isComplete(latestGhg.status) ? "Completato" : "Bozza"}
                 </span>
               )}
@@ -257,7 +269,7 @@ export default function ClientDetailPage() {
                     setGhgModal(true); setGhgExisting(null); setGhgNewYear(new Date().getFullYear() - 1);
                   }
                 }}
-                className="text-white px-4 py-2 rounded-md text-sm font-medium" style={{ backgroundColor: GHG_GREEN }}>
+                className="text-white px-4 py-2 text-sm transition-colors" style={{ backgroundColor: "#27AE60", borderRadius: 8, fontWeight: 600 }}>
                 {latestGhg && !isComplete(latestGhg.status)
                   ? `Continua → ${GHG_STEPS.find(s => s.key === (latestGhg.step_corrente || "modalita"))?.label || ""}`
                   : "+ Nuovo calcolo GHG"}
@@ -271,9 +283,9 @@ export default function ClientDetailPage() {
       </div>
 
       {/* ── MODULO 2: VSME Basic ── */}
-      <div className={`rounded-lg border p-5 ${vsmeBasicUnlocked ? "bg-white border-gray-200" : "border-gray-100"}`} style={vsmeBasicUnlocked ? (hasCompletedVsmeBasic ? { borderLeft: "3px solid #3B6D11" } : { borderLeft: "3px solid #185FA5" }) : { background: "#FAFAF9", opacity: 0.65 }}>
+      <div className="p-5" style={{ borderRadius: 12, border: "0.5px solid #E2EAE8", ...(vsmeBasicUnlocked ? { background: "#fff", borderLeft: "3px solid #27AE60", boxShadow: "0 1px 3px rgba(28,43,40,0.08)" } : { background: "#F4F8F7", opacity: 0.7 }) }}>
         <div className="flex items-start gap-4">
-          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: vsmeBasicUnlocked ? (hasCompletedVsmeBasic ? "#3B6D11" : GHG_GREEN) : "transparent", border: vsmeBasicUnlocked ? "none" : "1.5px solid #888", color: vsmeBasicUnlocked ? "#fff" : "#888", flexShrink: 0 }}>{hasCompletedVsmeBasic ? "✓" : "2"}</div>
+          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: vsmeBasicUnlocked ? "#27AE60" : "transparent", border: vsmeBasicUnlocked ? "none" : "1.5px solid #8AB5AC", color: vsmeBasicUnlocked ? "#fff" : "#8AB5AC", flexShrink: 0 }}>{hasCompletedVsmeBasic ? "✓" : "2"}</div>
           <div className="flex-1">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold" style={{ color: vsmeBasicUnlocked ? "#1C2B28" : "#666" }}>VSME Basic</h3>
@@ -299,9 +311,9 @@ export default function ClientDetailPage() {
       </div>
 
       {/* ── MODULO 3: Scope 3 ── */}
-      <div className={`rounded-lg border p-5 ${scope3Unlocked ? "bg-white border-gray-200" : "border-gray-100"}`} style={scope3Unlocked ? { borderLeft: "3px solid #185FA5" } : { background: "#FAFAF9", opacity: 0.65 }}>
+      <div className="p-5" style={{ borderRadius: 12, border: "0.5px solid #E2EAE8", ...(scope3Unlocked ? { background: "#fff", borderLeft: "3px solid #27AE60", boxShadow: "0 1px 3px rgba(28,43,40,0.08)" } : { background: "#F4F8F7", opacity: 0.7 }) }}>
         <div className="flex items-start gap-4">
-          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: scope3Unlocked ? "#2563eb" : "transparent", border: scope3Unlocked ? "none" : "1.5px solid #888", color: scope3Unlocked ? "#fff" : "#888", flexShrink: 0 }}>3</div>
+          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: scope3Unlocked ? "#27AE60" : "transparent", border: scope3Unlocked ? "none" : "1.5px solid #8AB5AC", color: scope3Unlocked ? "#fff" : "#8AB5AC", flexShrink: 0 }}>3</div>
           <div className="flex-1">
             <h3 className="text-sm font-semibold" style={{ color: scope3Unlocked ? "#1C2B28" : "#666" }}>Scope 3 — Emissioni indirette</h3>
             <p className="text-xs text-gray-400 mt-1">Screening significatività e quantificazione · ISO 14064-1</p>
@@ -324,9 +336,9 @@ export default function ClientDetailPage() {
       </div>
 
       {/* ── MODULO 4: VSME Comprehensive ── */}
-      <div className={`rounded-lg border p-5 ${vsmeCompUnlocked ? "bg-white border-gray-200" : "border-gray-100"}`} style={vsmeCompUnlocked ? { borderLeft: "3px solid #7c3aed" } : { background: "#FAFAF9", opacity: 0.65 }}>
+      <div className="p-5" style={{ borderRadius: 12, border: "0.5px solid #E2EAE8", ...(vsmeCompUnlocked ? { background: "#fff", borderLeft: "3px solid #27AE60", boxShadow: "0 1px 3px rgba(28,43,40,0.08)" } : { background: "#F4F8F7", opacity: 0.7 }) }}>
         <div className="flex items-start gap-4">
-          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: vsmeCompUnlocked ? "#7c3aed" : "transparent", border: vsmeCompUnlocked ? "none" : "1.5px solid #888", color: vsmeCompUnlocked ? "#fff" : "#888", flexShrink: 0 }}>4</div>
+          <div className="flex items-center justify-center rounded-full text-xs font-bold" style={{ width: 28, height: 28, background: vsmeCompUnlocked ? "#27AE60" : "transparent", border: vsmeCompUnlocked ? "none" : "1.5px solid #8AB5AC", color: vsmeCompUnlocked ? "#fff" : "#8AB5AC", flexShrink: 0 }}>4</div>
           <div className="flex-1">
             <h3 className="text-sm font-semibold" style={{ color: vsmeCompUnlocked ? "#1C2B28" : "#666" }}>VSME Comprehensive</h3>
             <p className="text-xs text-gray-400 mt-1">Report ESG completo con emissioni indirette · Standard EFRAG VSME</p>
@@ -447,9 +459,9 @@ export default function ClientDetailPage() {
       )}
 
       {/* ═══ 4. STORICO DOCUMENTI ═══ */}
-      <div className="bg-white rounded-lg border border-gray-200 overflow-hidden">
-        <div className="px-5 py-3 border-b border-gray-100">
-          <h2 className="text-sm font-semibold text-[#1C2B28]">Storico documenti</h2>
+      <div className="overflow-hidden" style={{ background: "#fff", borderRadius: 12, border: "0.5px solid #E2EAE8", padding: "0" }}>
+        <div style={{ padding: "16px 24px", borderBottom: "0.5px solid #E2EAE8" }}>
+          <h2 style={{ fontSize: 13, fontWeight: 600, color: "#1C2B28", margin: 0 }}>Storico documenti</h2>
         </div>
         {docs.length === 0 ? (
           <div className="px-5 py-10 text-center text-sm text-gray-400">Nessun documento — crea il primo calcolo GHG</div>
