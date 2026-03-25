@@ -55,12 +55,12 @@ const CAT_LABELS = {
 
 // Fallback reasons if table doesn't exist yet
 const FALLBACK_REASONS = [
-  { id: 1, text: 'Attività non presente nell\'organizzazione', applies_to: ['excluded_na', 'not_significant'] },
-  { id: 2, text: 'Emissioni stimate < 1% del totale inventario', applies_to: ['not_significant'] },
-  { id: 3, text: 'Dati non disponibili e non stimabili con ragionevole accuratezza', applies_to: ['not_significant', 'to_verify'] },
-  { id: 4, text: 'Inclusa in altra categoria (evitare doppia contabilizzazione)', applies_to: ['excluded_na', 'not_significant'] },
-  { id: 5, text: 'Da approfondire nella prossima rendicontazione', applies_to: ['to_verify'] },
-  { id: 6, text: 'Dati parziali disponibili — necessaria raccolta dati aggiuntiva', applies_to: ['to_verify'] },
+  { id: 1, label: 'Attività non presente nell\'organizzazione', applies_to: ['excluded_na', 'not_significant'] },
+  { id: 2, label: 'Emissioni stimate < 1% del totale inventario', applies_to: ['not_significant'] },
+  { id: 3, label: 'Dati non disponibili e non stimabili con ragionevole accuratezza', applies_to: ['not_significant', 'to_verify'] },
+  { id: 4, label: 'Inclusa in altra categoria (evitare doppia contabilizzazione)', applies_to: ['excluded_na', 'not_significant'] },
+  { id: 5, label: 'Da approfondire nella prossima rendicontazione', applies_to: ['to_verify'] },
+  { id: 6, label: 'Dati parziali disponibili — necessaria raccolta dati aggiuntiva', applies_to: ['to_verify'] },
 ]
 
 // ------------------------------------------------------------------
@@ -381,7 +381,7 @@ function SubcategoryRow({ sub, screening, onUpdate, exclusionReasons }) {
                   >
                     <option value="">— Motivazione obbligatoria —</option>
                     {verifyReasons.map(r => (
-                      <option key={r.id} value={r.text}>{r.text}</option>
+                      <option key={r.id} value={r.label}>{r.label}</option>
                     ))}
                   </select>
                   <textarea
@@ -418,7 +418,7 @@ function SubcategoryRow({ sub, screening, onUpdate, exclusionReasons }) {
               >
                 <option value="">— Seleziona motivazione —</option>
                 {filteredReasons.map(r => (
-                  <option key={r.id} value={r.text}>{r.text}</option>
+                  <option key={r.id} value={r.label}>{r.label}</option>
                 ))}
               </select>
               <textarea

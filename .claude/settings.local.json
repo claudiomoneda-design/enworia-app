@@ -29,7 +29,13 @@
       "Bash(grep -n \"step === \" src/app/clients/[id]/ghg/new/page.tsx)",
       "Bash(grep:*)",
       "Read(//tmp/**)",
-      "Bash(wc:*)"
+      "Bash(wc:*)",
+      "Bash(cat /c/Users/claud/Desktop/enworia/supabase/*.sql)",
+      "Bash(ls:*)",
+      "Bash(curl:*)",
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git push:*)"
     ]
   }
 }
